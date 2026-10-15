@@ -655,12 +655,15 @@ function fsa_logo(){
     var geo_paper = new THREE.BoxGeometry( 94, 94, 0.1 ); // main logo: bigger than the 62 sponsor boxes
     var textureLoader = new THREE.TextureLoader()
     var customTexture_paper_visible = textureLoader.load('assets/images/FSA_white.png') //change this to clue
-    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+    const texture_paper_visible = new THREE.MeshStandardMaterial({
         map: customTexture_paper_visible,
+        emissive: 0xffffff,
+        emissiveMap: customTexture_paper_visible, // the logo glows faintly with its own colours
+        emissiveIntensity: 0.12,
     })
     const fsa_logo = new THREE.Mesh(geo_paper, texture_paper_visible);
     fsa_logo.rotation.y += THREE.Math.degToRad(90)
-    fsa_logo.position.set(-175,25,131) // fills the wall from beside the instructions to the corner
+    fsa_logo.position.set(-175,40,131) // fills the wall from beside the instructions to the corner, raised off the floor
     fsa_logo.name = "fsa_logo"
     scene.add(fsa_logo)
 
