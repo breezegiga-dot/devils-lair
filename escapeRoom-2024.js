@@ -614,7 +614,7 @@ cybermart_paper()
 function fsa_logo(){
     var geo_paper = new THREE.BoxGeometry( 80, 80, 0.1 );
     var textureLoader = new THREE.TextureLoader()
-    var customTexture_paper_visible = textureLoader.load('assets/images/FSA.png') //change this to clue
+    var customTexture_paper_visible = textureLoader.load('assets/images/FSA_white.png') //change this to clue
     const texture_paper_visible = new THREE.MeshStandardMaterial({ 
         map: customTexture_paper_visible,
     })
