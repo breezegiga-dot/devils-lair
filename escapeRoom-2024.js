@@ -55,7 +55,7 @@ function live(){
 }
 
 const dLoader = new DRACOLoader()
-dLoader.setDecoderPath('draco/')
+dLoader.setDecoderPath('draco/') // served locally so the door loads offline and on any host
 dLoader.setDecoderConfig({type:'js'})
 
 let start_bunny, start_bunny2, dark_man = false, dark_man2 = false
@@ -611,6 +611,40 @@ function cybermart_paper(){
 }
 cybermart_paper()
 
+// Sponsor logos on the start room's west wall, north of the doorway (wall face z -178 to -40).
+// Each poster is sized from its image so the logo keeps its aspect ratio inside a 62 x 62 box.
+function sponsor_posters(){
+    const sponsors = [
+        { file: 'assets/images/sponsor_acadimyst.png', name: "sponsor_acadimyst", z: -144 },
+        { file: 'assets/images/sponsor_mm.png', name: "sponsor_mm", z: -74 },
+    ]
+    const box = 62
+    var textureLoader = new THREE.TextureLoader()
+
+    sponsors.forEach((sponsor) => {
+        const poster = new THREE.Mesh(new THREE.BoxGeometry( 1, 1, 0.1 ), new THREE.MeshStandardMaterial())
+        poster.rotation.y += THREE.Math.degToRad(90)
+        poster.position.set(-175,25,sponsor.z)
+        poster.scale.set(box, box, 1)
+        poster.name = sponsor.name
+        scene.add(poster)
+
+        textureLoader.load(sponsor.file, (texture) => {
+            const aspect = texture.image.width / texture.image.height
+            if (aspect >= 1)
+                poster.scale.set(box, box / aspect, 1)
+            else
+                poster.scale.set(box * aspect, box, 1)
+            poster.material.map = texture
+            poster.material.needsUpdate = true
+        }, undefined, () => {
+            // image missing: hide the poster instead of leaving a blank white panel
+            scene.remove(poster)
+        })
+    })
+}
+// sponsor_posters() // switched on once the sponsor logo files are uploaded
+
 function fsa_logo(){
     var geo_paper = new THREE.BoxGeometry( 80, 80, 0.1 );
     var textureLoader = new THREE.TextureLoader()
@@ -835,7 +869,15 @@ function addModel(model_file,name,x,y,z,scale,visibility,animation_num,sound_fil
             //     },timeout);
             // }
             // sounds[name] = sound;
-            
+
+            loadModel()
+        }, undefined, (error) => {
+            // a missing or blocked sound must not stop the model from appearing
+            console.warn("sound failed to load for", name, error)
+            loadModel()
+        });
+
+        function loadModel(){
             loader.load('assets/models/'.concat(model_file), (gltf) => {
                 const model = gltf.scene;
                 model.visible = visibility;
@@ -875,11 +917,18 @@ function addModel(model_file,name,x,y,z,scale,visibility,animation_num,sound_fil
                 }
 
                 resolve(modelsArray, collidableMeshList);
-            }
-        )}, undefined, reject);
-    
+            }, undefined, reject);
+        }
     }
     );
+}
+
+// Removes one specific mesh from collisions. (Array.pop() always removed the LAST entry instead,
+// which silently deleted the door/goat colliders whenever the huggy trigger fired.)
+function removeCollidable(object){
+    const index = collidableMeshList.indexOf(object)
+    if (index !== -1)
+        collidableMeshList.splice(index, 1)
 }
 
 function getObjectByName(objectName) {
@@ -1034,11 +1083,14 @@ function display_alert(text, timeout){
 //    // hugger.rotation.y += THREE.Math.degToRad(180)
 
 
-    await addModel("hallucination_huggy.glb","hugger_idle",1000,20,1550,500,true,2,"-",10); //180,-550
+    // both huggy copies load at the same time; the chaser stays hidden until the chase starts
+    await Promise.all([
+        addModel("hallucination_huggy.glb","hugger_idle",1000,20,1550,500,true,2,"-",10), //180,-550
+        addModel("hallucination_huggy.glb","hugger",1000,-20,1550,500,false,1,"-",10), //180,-550
+    ])
     hugger_idle = getObjectByName("hugger_idle")
     hugger_idle.rotation.y += THREE.Math.degToRad(180)
 
-    await addModel("hallucination_huggy.glb","hugger",1000,-20,1550,500,true,1,"-",10); //180,-550
     hugger = getObjectByName("hugger")
     hugger.visible = false
     hugger.rotation.y += THREE.Math.degToRad(-90)
@@ -1104,26 +1156,12 @@ function display_alert(text, timeout){
     // let demon2 = getObjectByName("demon2-box")
     // demon2.rotation.y += THREE.Math.degToRad(90)
     // // ///////
-    await addModel("door_compressed.glb","door",1900,-30,-20,1.8,true,0,"-",10);
-    door = getObjectByName("door")
-    // collidableMeshList.push(door)
-    door.rotation.y += THREE.Math.degToRad(90)
-    addModelBoundary("door",200,1880,80,0)
+    // door and goat (satan) load in their own chain below, so they no longer wait for the huggy models
     //////
 
     // clickList.push(demon)
     // console.log(demon)
-    await addModel("goat.glb","satan",2150,80,0,5,true,0,"-",10);
-    let satan = getObjectByName("satan")
-    satan.rotation.y += THREE.Math.degToRad(-90)
-    addLight("satan")
-    let satan_light = getObjectByName("satan_light")
-    satan_light.position.y += 80
-    satan_light.position.x -= 50
-    satan_light.target = satan
-    addModelBoundary("satan",150,2100,50,0)
-    /////////
-    
+
     // addLight("taunt")
     // await addModel("fallen_angel.glb","angel",0,20,0,1,true,4,"evil-laughing.mp3",10);
     // let angel = getObjectByName("angel")
@@ -1133,8 +1171,38 @@ function display_alert(text, timeout){
     // await addModel("devil_on_a_throne.glb","devil",0,-20,0,0.5,true,0,"evil-laughing.mp3",10);
 
     // await addModel("monster_dogday_-_poppy_playtime.glb","monster_dogday_-_poppy_playtime",0,0,0,30,true,1,"evil-laughing.mp3",10); //0 or 1 animation
-   
+
 })();
+
+//// final door + goat
+(async () => {
+    // Colliders exist from the first frame, so the final room stays locked even while the models
+    // are still downloading (before, door-box only appeared after the huggy and door models loaded).
+    addModelBoundary("door",200,1880,80,0)
+    addModelBoundary("satan",150,2100,50,0)
+
+    try {
+        await addModel("door_compressed.glb","door",1900,-30,-20,1.8,true,0,"-",10);
+    } catch (error) {
+        console.warn("door_compressed.glb failed to load, using door.glb", error)
+        await addModel("door.glb","door",1900,-30,-20,1.8,true,0,"-",10);
+    }
+    door = getObjectByName("door")
+    door.rotation.y += THREE.Math.degToRad(90)
+    if (door_passed)
+        scene.remove(door) // password was entered before the model finished loading
+    //////
+
+    await addModel("goat.glb","satan",2150,80,0,5,true,0,"-",10);
+    let satan = getObjectByName("satan")
+    satan.rotation.y += THREE.Math.degToRad(-90)
+    addLight("satan")
+    let satan_light = getObjectByName("satan_light")
+    satan_light.position.y += 80
+    satan_light.position.x -= 50
+    satan_light.target = satan
+    /////////
+})().catch((error) => console.error("final room models failed to load", error));
 
 let cameraPosition = new THREE.Vector3(camera.position.x, -50, camera.position.z); 
 let targetPosition = new THREE.Vector3(cameraPosition.x-lightTurn, 50, cameraPosition.z); 
@@ -1194,10 +1262,10 @@ function intersection(direction, distance) {
                 start_bunny = true
                 let bunny_box2 = getObjectByName("bunny2-box")
                 scene.remove(bunny_box2)
-                collidableMeshList.pop(bunny_box2)
+                removeCollidable(bunny_box2)
                 let bunny_box = getObjectByName("bunny-box")
                 scene.remove(bunny_box)
-                collidableMeshList.pop(bunny_box)
+                removeCollidable(bunny_box)
                 addLight("bunny");
                 scene.remove(bunny2)
                 torch_on = 0
@@ -1213,10 +1281,10 @@ function intersection(direction, distance) {
                 start_bunny2 = true
                 let bunny_box2 = getObjectByName("bunny2-box")
                 scene.remove(bunny_box2)
-                collidableMeshList.pop(bunny_box2)
+                removeCollidable(bunny_box2)
                 let bunny_box = getObjectByName("bunny-box")
                 scene.remove(bunny_box)
-                collidableMeshList.pop(bunny_box)
+                removeCollidable(bunny_box)
                 addLight("bunny2");
                 scene.remove(bunny)
                 torch_on = 0
@@ -1231,10 +1299,10 @@ function intersection(direction, distance) {
                 dark_man = true
                 let dark_man_box2 = getObjectByName("dark_man2-box")
                 scene.remove(dark_man_box2)
-                collidableMeshList.pop(dark_man_box2)
+                removeCollidable(dark_man_box2)
                 let dark_man_box = getObjectByName("dark_man-box")
                 scene.remove(dark_man_box)
-                collidableMeshList.pop(dark_man_box)
+                removeCollidable(dark_man_box)
                 addLight("dark_man");
                 torch_on = 0
                 spotLight.intensity = 0
@@ -1248,10 +1316,10 @@ function intersection(direction, distance) {
                 dark_man2 = true
                 let dark_man_box2 = getObjectByName("dark_man2-box")
                 scene.remove(dark_man_box2)
-                collidableMeshList.pop(dark_man_box2)
+                removeCollidable(dark_man_box2)
                 let dark_man_box = getObjectByName("dark_man-box")
                 scene.remove(dark_man_box)
-                collidableMeshList.pop(dark_man_box)
+                removeCollidable(dark_man_box)
                 addLight("dark_man2");
                 torch_on = 0
                 spotLight.intensity = 0
@@ -1263,7 +1331,7 @@ function intersection(direction, distance) {
                 zombie_follow = 1    
                 let box = getObjectByName("zombie-box");
                 scene.remove(box)
-                collidableMeshList.pop(box)
+                removeCollidable(box)
                 // console.log("hit",5000)
                 clock = new THREE.Clock();   
                  
@@ -1295,13 +1363,15 @@ function intersection(direction, distance) {
 //hugger_idle
         else if (intersections[0].object.name === "hugger-box"){
         // if(hugger_hit != 1){
-            hugger_follow = 1    
+            hugger_follow = 1
 
             let box = getObjectByName("hugger-box");
             scene.remove(box)
-            collidableMeshList.pop(box)
+            removeCollidable(box)
             // console.log("hit",2000)
-            clock_hugger = new THREE.Clock();   
+            clock_hugger = new THREE.Clock();
+            hugger_spawned = false
+            hugger_path = [camera.position.clone()] // the trail starts where the player triggered it
                 
         // }
 
@@ -1456,8 +1526,8 @@ function onMouseClick(event) {
                         let demon_box2 = getObjectByName("demon2-box")
                         scene.remove(demon_box)
                         scene.remove(demon_box2)
-                        collidableMeshList.pop(demon_box)
-                        collidableMeshList.pop(demon_box2)     
+                        removeCollidable(demon_box)
+                        removeCollidable(demon_box2)     
                         demon_clue()                   
                     } 
                     // console.log(userInput, demon_passed);
@@ -1550,8 +1620,8 @@ function onMouseClick(event) {
                         // let demon_box2 = getObjectByName("demon2-box")
                         scene.remove(door_box)
                         scene.remove(door)
-                        collidableMeshList.pop(door_box)
-                        collidableMeshList.pop(door)     
+                        removeCollidable(door_box)
+                        removeCollidable(door)     
                         // demon_clue()                   
                     } 
                     // console.log(userInput, door_passed);
@@ -1794,26 +1864,107 @@ let elapsedTime
 let zombie_run = 0, hugger_run = 0, zombie_stop = 1, hugger_stop = 1
 let hit_clock, hit_elapsedTime_zombie, hit_elapsedTime_hugger, elapsedTime_hugger, hit_clock_hugger
 let hugger_path = [], hugger_move = 0, zombie_hit=0,hugger_hit=0
+
+// Huggy chase. 7 s after the trigger the crawler appears where the idle Huggy stood and follows
+// the player's exact trail at walking speed. Moving keeps the gap; stopping, turning on the spot
+// or walking into walls lets it close in. It gives up after 60 s.
+// (Before, it jumped one trail point per frame and "caught" the player the moment the trail was
+// empty, so a player who stood still during the countdown was caught before Huggy ever appeared.)
+const HUGGER_SPAWN_TIME = 7
+const HUGGER_GIVE_UP_TIME = 60
+const HUGGER_CATCH_DISTANCE = 60
+const HUGGER_SPAWN_POSITION = new THREE.Vector3(1000, -20, 1550)
+let hugger_spawned = false
+
+function update_hugger_chase(){
+    if(!clock_hugger || !hugger_follow || !hugger_stop || !hugger)
+        return
+    elapsedTime_hugger = clock_hugger.getElapsedTime();
+    const seconds = parseInt(elapsedTime_hugger)
+
+    if(!hugger_spawned){
+        if(seconds < HUGGER_SPAWN_TIME){
+            if(seconds > 2)
+                display_alert(HUGGER_SPAWN_TIME-seconds,0)
+            return
+        }
+        // spawn exactly once (the growl used to be started on every frame of second 7)
+        hugger_spawned = true
+        if(hugger_idle){
+            hugger_idle.visible = false
+            scene.remove(hugger_idle)
+        }
+        hugger.position.copy(HUGGER_SPAWN_POSITION)
+        hugger.visible = true
+        dynamic_audio("monster-growls.mp3",60000,5)
+        display_alert(0,1000)
+    }
+
+    if(elapsedTime_hugger >= HUGGER_GIVE_UP_TIME){
+        remove_hugger()
+        hugger_stop = 0
+        hugger_follow = 0
+        return
+    }
+
+    // crawl along the trail, player.speed units per frame
+    const position = hugger.position
+    let step = player.speed
+    while(step > 0){
+        const target = hugger_path.length > 0 ? hugger_path[0] : camera.position
+        const dx = target.x - position.x
+        const dz = target.z - position.z
+        const distance = Math.hypot(dx, dz)
+        if(distance > 0.001)
+            hugger.rotation.y = Math.atan2(dx, dz) // model faces +z
+        if(distance <= step){
+            position.x = target.x
+            position.z = target.z
+            step -= distance
+            if(hugger_path.length > 0)
+                hugger_path.shift()
+            else
+                break
+        }
+        else{
+            position.x += dx / distance * step
+            position.z += dz / distance * step
+            step = 0
+        }
+    }
+    position.y = HUGGER_SPAWN_POSITION.y
+    spotLight.intensity = 0.8
+
+    if(Math.hypot(camera.position.x - position.x, camera.position.z - position.z) < HUGGER_CATCH_DISTANCE)
+        hugger_caught()
+}
+
+function hugger_caught(){
+    display_alert("YOU GOT CAUGHT...<br>WAIT for 30 Seconds TILL THE DEVIL'S DISCIPLES RELEASES YOU",20000)
+    hugger_stop = 0
+    spotLight.intensity = 0
+    hit_clock_hugger = new THREE.Clock()
+    movement = 0
+    hugger_follow = 0
+    hugger_hit = 1
+    remove_hugger()
+}
+
+function remove_hugger(){
+    while(hugger){
+        scene.remove(hugger)
+        hugger = getObjectByName("hugger")
+    }
+}
+
 function animate() {
     requestAnimationFrame( animate );
     
     zombie_run = 0
     hugger_run = 0
     
-    if(clock_hugger  && hugger_follow){
-        elapsedTime_hugger = clock_hugger.getElapsedTime();
-        if(parseInt(elapsedTime_hugger) < 7 && parseInt(elapsedTime_hugger) > 2){
-            display_alert(7-parseInt(elapsedTime_hugger),0)    
-        }
-        else if(parseInt(elapsedTime_hugger) === 7){
-            // animation_hugger(1,1)
-            hugger_idle.visible = false
-            hugger.visible = true
-            scene.remove(hugger_idle)
-            dynamic_audio("monster-growls.mp3",60000,5)
-            display_alert(7-parseInt(elapsedTime_hugger),1000)    
-        }
-    }
+    update_hugger_chase()
+
     if(clock && zombie_follow){
         elapsedTime = clock.getElapsedTime();
         
@@ -1985,37 +2136,7 @@ function animate() {
             // }
 
             
-            if(hugger_follow){
-                // console.log("hugger")
-               
-                if(elapsedTime_hugger > 7 && elapsedTime_hugger < 60 && hugger_stop){
-                    if(!hugger_run && hugger_follow){
-                        hugger_run = 1
-                        // console.log("move")
-                        let path = hugger_path.shift()
-                        // path = hugger_path.shift()
-                        // console.log(hugger_path.length)
-                        hugger.rotation.y = hugger_angle
-                        if(hugger_path.length > 0){
-                                hugger.position.set(path.x,-20,path.z)
-                                spotLight.intensity = 0.8                    
-                        }
-                        else{
-                            hugger_stop = 0
-                            spotLight.intensity = 0
-                            hit_clock_hugger = new THREE.Clock()
-                            movement = 0
-                            hugger_follow = 0
-                            hugger_hit = 1
-                            hugger.visible = false
-                            while(hugger){
-                                scene.remove(hugger)
-                                hugger = getObjectByName("hugger")    
-                            }
-                        }
-                    }
-                }
-            }
+            // hugger movement now happens in update_hugger_chase()
             // if(elapsedTime_hugger > 5){
             //     if(!hugger_run && hugger_follow){
             //         hugger_run = 1
@@ -2085,52 +2206,7 @@ function animate() {
             }
 
 
-            if(elapsedTime_hugger > 7 && elapsedTime_hugger < 60 && hugger_stop){
-                if(!hugger_run && hugger_follow){
-                    // console.log("run")
-                    let path = hugger_path.shift()
-                    // path = hugger_path.shift()
-                    // console.log(hugger_path.length)
-                    hugger.rotation.y = hugger_angle
-                    if(hugger_path.length > 0){
-                        // setTimeout(function() {
-                            hugger.position.set(path.x,-20,path.z)
-                            spotLight.intensity = 0.8                    
-                        // },1000)
-                    }
-                    else{
-                        display_alert("YOU GOT CAUGHT...<br>WAIT for 30 Seconds TILL THE DEVIL'S DISCIPLES RELEASES YOU",20000)
-                        hugger_stop = 0
-                        spotLight.intensity = 0
-                        hit_clock_hugger = new THREE.Clock()
-                        movement = 0
-                        hugger_follow = 0
-                        while(hugger){
-                            scene.remove(hugger)
-                            hugger = getObjectByName("hugger")    
-                        }
-                        // scene.remove(hugger)
-                        // hugger = getObjectByName("hugger")
-                        // if(hugger)
-                        //     scene.remove(hugger)
-                        // // console.log(scene.children)
-                        hugger_hit = 1
-                    }
-                }
-            }
-
-            else if(elapsedTime_hugger > 60 && hugger_stop){
-                while(hugger){
-                    scene.remove(hugger)
-                    hugger = getObjectByName("hugger")    
-                }
-                // scene.remove(hugger)
-                // hugger = getObjectByName("hugger")
-                // if(hugger)
-                //     scene.remove(hugger)
-                hugger_stop = 0
-                hugger_follow = 0
-            }
+            // hugger movement, catching and the 60 s give-up now happen in update_hugger_chase()
             // if(elapsedTime_hugger > 5 && elapsedTime_hugger < 20){
             //     if(!hugger_run && hugger_follow){
             //         hugger_run = 1
