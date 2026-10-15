@@ -609,14 +609,15 @@ function cybermart_paper(){
     // lighting(-172,25,-80,0.8,0.1,300)
     clickList.push(cybermart_paper)
 }
-cybermart_paper()
+// cybermart_paper() // old sponsor (The No Ball), replaced by sponsor_posters()
 
 // Sponsor logos on the start room's west wall, north of the doorway (wall face z -178 to -40).
 // Each poster is sized from its image so the logo keeps its aspect ratio inside a 62 x 62 box.
+// crop trims the empty margin around a logo: x, y, w, h as fractions of the image, from the top left.
 function sponsor_posters(){
     const sponsors = [
-        { file: 'assets/images/sponsor_acadimyst.png', name: "sponsor_acadimyst", z: -144 },
-        { file: 'assets/images/sponsor_mm.png', name: "sponsor_mm", z: -74 },
+        { file: 'assets/images/sponsor_acadimyst.jpeg', name: "sponsor_acadimyst", z: -144, crop: { x: 0.080, y: 0.041, w: 0.846, h: 0.797 } },
+        { file: 'assets/images/sponsor_mm.jpeg', name: "sponsor_mm", z: -74, crop: { x: 0.197, y: 0.043, w: 0.605, h: 0.900 } },
     ]
     const box = 62
     var textureLoader = new THREE.TextureLoader()
@@ -625,28 +626,33 @@ function sponsor_posters(){
         const poster = new THREE.Mesh(new THREE.BoxGeometry( 1, 1, 0.1 ), new THREE.MeshStandardMaterial())
         poster.rotation.y += THREE.Math.degToRad(90)
         poster.position.set(-175,25,sponsor.z)
-        poster.scale.set(box, box, 1)
+        poster.visible = false // shown once the logo has loaded
         poster.name = sponsor.name
         scene.add(poster)
 
         textureLoader.load(sponsor.file, (texture) => {
-            const aspect = texture.image.width / texture.image.height
+            const crop = sponsor.crop || { x: 0, y: 0, w: 1, h: 1 }
+            texture.repeat.set(crop.w, crop.h)
+            texture.offset.set(crop.x, 1 - crop.y - crop.h) // texture v runs bottom to top
+
+            const aspect = (texture.image.width * crop.w) / (texture.image.height * crop.h)
             if (aspect >= 1)
                 poster.scale.set(box, box / aspect, 1)
             else
                 poster.scale.set(box * aspect, box, 1)
             poster.material.map = texture
             poster.material.needsUpdate = true
+            poster.visible = true
         }, undefined, () => {
-            // image missing: hide the poster instead of leaving a blank white panel
+            // image missing: leave the spot empty instead of showing a blank panel
             scene.remove(poster)
         })
     })
 }
-// sponsor_posters() // switched on once the sponsor logo files are uploaded
+sponsor_posters()
 
 function fsa_logo(){
-    var geo_paper = new THREE.BoxGeometry( 80, 80, 0.1 );
+    var geo_paper = new THREE.BoxGeometry( 94, 94, 0.1 ); // main logo: bigger than the 62 sponsor boxes
     var textureLoader = new THREE.TextureLoader()
     var customTexture_paper_visible = textureLoader.load('assets/images/FSA_white.png') //change this to clue
     const texture_paper_visible = new THREE.MeshStandardMaterial({ 
@@ -654,7 +660,7 @@ function fsa_logo(){
     })
     const fsa_logo = new THREE.Mesh(geo_paper, texture_paper_visible);
     fsa_logo.rotation.y += THREE.Math.degToRad(90)
-    fsa_logo.position.set(-175,25,130)
+    fsa_logo.position.set(-175,25,131) // fills the wall from beside the instructions to the corner
     fsa_logo.name = "fsa_logo"
     scene.add(fsa_logo)
 
