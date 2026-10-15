@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DEVIL'S LAIR</title>
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.130.1/build/three.module.js",
+            "OrbitControls": "https://unpkg.com/three@0.130.1/examples/jsm/controls/OrbitControls.js",
+            "Loaders": "https://unpkg.com/three@0.130.1/examples/jsm/loaders/OBJLoader.js",
+            "dat" : "https://unpkg.com/dat.gui@0.7.6/build/dat.gui.module.js",
+            "GLTFLoader": "https://unpkg.com/three@0.130.1/examples/jsm/loaders/GLTFLoader.js",
+            "DRACOLoader": "https://unpkg.com/three@0.130.1/examples/jsm/loaders/DRACOLoader.js",
+            "Tween": "https://unpkg.com/three@0.139.0/examples/jsm/libs/tween.module.min.js"
+          }
+        }
+    </script>
+    <link href="style.css" rel="stylesheet" type="text/css">
+    <style>
+      html, body { background: #000; }
+      body { margin: 0; overflow: hidden; }
+      #overlay { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; }
+      #image { max-width: 80vw; max-height: 80vh; cursor: pointer; }
+      #closeButton { position: absolute; top: 10px; right: 10px; font-size: 20px; color: white; cursor: pointer; }
+      #startHint { position: fixed; inset: 0; display: grid; place-items: center; z-index: 50; color: #ccc; font: 16px/1.5 system-ui, sans-serif; text-align: center; background: rgba(0,0,0,.55); cursor: pointer; }
+      #startHint b { color: #e04a3f; font-size: 22px; letter-spacing: .08em; }
+    </style>
+</head>
+<body>
+  <main>
+    <section id="section">
+      <p id="message"></p>
+      <input type="hidden" id="password">
+    </section>
+  </main>
+  <div id="fullscreenOverlay" style="display: none;">
+    <span class="close">&times;</span>
+    <img id="fullscreenImage" src="assets/images/chess.png" alt="Fullscreen Image">
+  </div>
+  <div id="startHint"><div><b>DEVIL'S LAIR</b><br>Click to start · W / S move · A / D turn · click objects to inspect<br><small>Models take a few seconds to load</small></div></div>
+  <script>
+    document.getElementById("startHint").addEventListener("click", function (e) { e.stopPropagation(); this.remove(); window.focus(); });
+  </script>
+  <script type="module" src="./escapeRoom-2024.js"></script>
+  <div id="overlay">
+    <img id="image" src="" alt="Fullscreen Image">
+    <div id="closeButton">✖</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,2363 @@
+import * as THREE from 'three';
+import * as orbit from 'OrbitControls'
+import * as gltf from 'GLTFLoader'
+import {DRACOLoader} from 'DRACOLoader'
+import * as loaders from 'Loaders'
+import * as dat from 'dat'
+import { BoxBufferGeometry, Material } from 'three';
+import {TWEEN} from 'Tween'
+function degInRad(deg) {
+    return deg * Math.PI / 180;
+ }
+
+function createRenderer() {
+    const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true  });
+    // renderer.physicallyCorrectLights = true;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setSize( window.innerWidth, window.innerHeight );
+    return renderer
+}
+
+const renderer = createRenderer()
+
+document.body.appendChild( renderer.domElement );
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.01, 100000 );
+camera.position.set( 0, 6000, 0 );
+// const controls = new orbit.OrbitControls( camera, renderer.domElement );
+// controls.target.set( 0, 0, 0 );
+// controls.update();
+// controls.enableDamping = true
+// controls.rotateSpeed = 1.0;
+// controls.zoomSpeed = 1.2;
+// controls.panSpeed = 0.8;
+// controls.keys = [ 65, 83, 68 ];
+
+function live(){
+    const controls = new orbit.OrbitControls( camera, renderer.domElement );
+
+    camera.position.set( 0, 30, 0 );
+    controls.target.set(0, 155, 0 );
+    
+    controls.update();
+    camera.rotation.y += degInRad(90)
+    camera.rotation.x += degInRad(-90)
+    controls.rotateSpeed = 1.0;
+    controls.zoomSpeed = 1.2;
+    // controls.panSpeed = 0.8;
+    // controls.keys = [ 65, 83, 68 ];
+    
+    controls.enableZoom = false;
+    controls.enableRotate = false;
+    controls.enablePan = false;
+}
+
+const dLoader = new DRACOLoader()
+dLoader.setDecoderPath('draco/')
+dLoader.setDecoderConfig({type:'js'})
+
+let start_bunny, start_bunny2, dark_man = false, dark_man2 = false
+let modelsArray = [];
+const loader = new gltf.GLTFLoader(); // Correct the loader instantiation
+loader.setDRACOLoader(dLoader)
+const transparentMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.5, // Set the opacity (0 is fully transparent, 1 is fully opaque)
+});
+
+
+var lights = []
+function lighting(x,y,z,intensity,size,distance){
+    // var x = Math.floor(Math.random() * -3000) + 1;
+    // var z = Math.floor(Math.random() * -3000) + 1;
+
+    // console.log(x, z)
+    const sphere = new THREE.SphereGeometry( size, size, size );
+    var light = new THREE.PointLight( 'yellow',intensity,distance);
+    // light.castShadow = true
+    light.add( new THREE.Mesh( sphere, new THREE.MeshBasicMaterial( { color: 'yellow' } ) ) );
+    scene.add( light );
+    light.position.set(x,y,z)
+    light.name = "candle_flame"
+    lights.push(light)
+
+}
+
+
+var base = 10
+var wall_length = 150
+var wall_height = 150
+var wall_width = 15
+var path_width = 8
+var wall_space = (wall_length/1.4 + path_width/2) 
+
+var collidableMeshList = [];
+var oldCamera;
+// oldCamera = camera.clone();
+
+
+
+var geo = new THREE.BoxGeometry( wall_height, wall_length, wall_width );
+var mat = new THREE.MeshStandardMaterial({color: 0x525252});
+var textureLoader = new THREE.TextureLoader()
+const customTexture = textureLoader.load('assets/textures/scratches.jpg')
+
+const texture = new THREE.MeshStandardMaterial({ 
+    map: customTexture
+})
+
+function maze_boundary(){
+    var geo_boundary = new THREE.BoxGeometry( 150, 5000, 10 );
+    var textureLoader = new THREE.TextureLoader()
+    const customTexture = textureLoader.load('assets/textures/scratches.jpg')
+
+    const texture = new THREE.MeshStandardMaterial({ 
+        map: customTexture
+    })
+
+    var plane = new THREE.Mesh(geo_boundary, texture);
+    plane.rotation.z=THREE.Math.degToRad(-90);
+    plane.position.set(0, 50, -1200)
+    plane.receiveShadow = true;
+    scene.add(plane)
+
+    var plane2 = new THREE.Mesh(geo_boundary, texture);
+    plane2.rotation.z=THREE.Math.degToRad(-90);
+    plane2.position.set(0, 50, 1750)
+    plane2.receiveShadow = true;
+    scene.add(plane2)
+
+    var plane3 = new THREE.Mesh(geo_boundary, texture);
+    plane3.rotation.z=THREE.Math.degToRad(-90);
+    plane3.rotation.y=THREE.Math.degToRad(-90);
+    plane3.position.set(2200, 50, 0)
+    plane3.receiveShadow = true;
+    scene.add(plane3)
+
+    var plane4 = new THREE.Mesh(geo_boundary, texture);
+    plane4.rotation.z=THREE.Math.degToRad(-90);
+    plane4.rotation.y=THREE.Math.degToRad(-90);
+    plane4.position.set(-2200, 50, 0)
+    plane4.receiveShadow = true;
+    scene.add(plane4)
+
+    collidableMeshList.push(plane)
+    collidableMeshList.push(plane2)
+    collidableMeshList.push(plane3)
+    collidableMeshList.push(plane4)
+
+
+    // collidableMeshList.push(plane2)
+}
+
+maze_boundary()
+
+function floor(){
+    var geo_floor = new THREE.BoxGeometry( 5000, 5000, 60 );
+    var mat = new THREE.MeshBasicMaterial({color: 'black'});
+    var plane = new THREE.Mesh(geo_floor, mat);
+    plane.rotation.x=THREE.Math.degToRad(-90);
+    plane.position.set(0, 60, 0)
+    plane.receiveShadow = true;
+    scene.add(plane)
+}
+
+function bottom_left_corner(center_x, center_z){
+    var x = center_x - wall_space
+    var z = center_z  - wall_space   
+    // console.log(x-wall_length/2,z-wall_length/2)
+    
+
+    var mat = new THREE.MeshStandardMaterial({color:'#910707'});
+    var plane = new THREE.Mesh(geo, texture);
+    plane.rotation.z=THREE.Math.degToRad(-90);
+    plane.position.set(x, 50, z-wall_length/2)
+    plane.receiveShadow = true;
+    plane.castShadow = true;
+    scene.add(plane)
+
+    var plane2 = new THREE.Mesh(geo, texture);
+    plane2.rotation.y=THREE.Math.degToRad(-90);
+    plane2.rotation.z=THREE.Math.degToRad(-90);
+    plane2.position.set(x-wall_length/2, 50, z)
+    
+    // plane2.position.set(-150, 50, -100)
+    plane2.receiveShadow = true;
+    plane2.castShadow = true;
+    scene.add(plane2)
+
+    collidableMeshList.push(plane)
+    collidableMeshList.push(plane2)
+}
+
+function top_right_corner(center_x, center_z){
+    var x = center_x + wall_space
+    var z = center_z  + wall_space   
+    // console.log(x-wall_length/2,z-wall_length/2)
+    
+    // var geo = new THREE.BoxGeometry( wall_height, wall_length, wall_width );
+    var mat = new THREE.MeshStandardMaterial({color: 0x525252});
+    var plane = new THREE.Mesh(geo, texture);
+
+    plane.rotation.z=THREE.Math.degToRad(-90);
+    plane.position.set(x, 50, z+wall_length/2)
+    plane.receiveShadow = true;
+    plane.castShadow = true;
+    scene.add(plane)
+
+    var plane2 = new THREE.Mesh(geo, texture);
+    plane2.rotation.y=THREE.Math.degToRad(-90);
+    plane2.rotation.z=THREE.Math.degToRad(-90);
+    plane2.position.set(x+wall_length/2, 50, z)
+    // plane2.position.set(-150, 50, -100)
+    plane2.castShadow = true;
+    plane2.receiveShadow = true;
+    scene.add(plane2)
+
+    collidableMeshList.push(plane)
+    collidableMeshList.push(plane2)
+}
+
+function bottom_right_corner(center_x, center_z){
+    var x = center_x - wall_space
+    var z = center_z  + wall_space   
+    // console.log(x-wall_length/2,z-wall_length/2)
+    
+    // var geo = new THREE.BoxGeometry( wall_height, wall_length, wall_width );
+    var mat = new THREE.MeshStandardMaterial({color: 0x525252});
+    var plane = new THREE.Mesh(geo, texture);
+
+    plane.rotation.z=THREE.Math.degToRad(-90);
+    plane.position.set(x, 50, z+wall_length/2)
+    plane.receiveShadow = true;
+    plane.castShadow = true;
+    scene.add(plane)
+
+    var plane2 = new THREE.Mesh(geo, texture);
+    plane2.rotation.y=THREE.Math.degToRad(-90);
+    plane2.rotation.z=THREE.Math.degToRad(-90);
+    plane2.position.set(x-wall_length/2, 50, z)
+    // plane2.position.set(-150, 50, -100)
+    plane2.receiveShadow = true;
+    plane2.castShadow = true;
+    scene.add(plane2)
+
+    collidableMeshList.push(plane)
+    collidableMeshList.push(plane2)
+}
+
+function top_left_corner(center_x, center_z){
+    var x = center_x + wall_space
+    var z = center_z  - wall_space   
+    var mat = new THREE.MeshStandardMaterial({color: 0x525252});
+    var plane = new THREE.Mesh(geo, texture);
+
+    plane.rotation.z=THREE.Math.degToRad(-90);
+    plane.position.set(x, 50, z-wall_length/2)
+    plane.receiveShadow = true;
+    plane.castShadow = true;
+    scene.add(plane)
+
+    var plane2 = new THREE.Mesh(geo, texture);
+    plane2.rotation.y=THREE.Math.degToRad(-90);
+    plane2.rotation.z=THREE.Math.degToRad(-90);
+    plane2.position.set(x+wall_length/2, 50, z)
+    // plane2.position.set(-150, 50, -100)
+    plane2.receiveShadow = true;
+    plane2.castShadow = true;
+    scene.add(plane2)
+
+    collidableMeshList.push(plane)
+    collidableMeshList.push(plane2)
+}
+
+function inner_sqaure(a,b){
+    var x = path_width/2 + wall_length*2 + 2*wall_height/2 + path_width*8
+    var x1 = a + x
+    var x2 = a - x
+
+    var y1 = b + x
+    var y2 = b - x
+
+    top_right_corner(a,b)
+    bottom_left_corner(a,b)
+    top_left_corner(a,b)
+    bottom_right_corner(a,b)
+
+    top_right_corner(x2,b)
+    bottom_left_corner(x2,b)
+    top_left_corner(x2,b)
+    bottom_right_corner(x2,b)
+
+    top_right_corner(x1,b)
+    bottom_left_corner(x1,b)
+    top_left_corner(x1,b)
+    bottom_right_corner(x1,b)
+
+    top_right_corner(x2,y1)
+    bottom_left_corner(x2,y1)
+    top_left_corner(x2,y1)
+    bottom_right_corner(x2,y1)
+
+    top_right_corner(x1,y1)
+    bottom_left_corner(x1,y1)
+    top_left_corner(x1,y1)
+    bottom_right_corner(x1,y1)
+
+    top_right_corner(a,y1)
+    bottom_left_corner(a,y1)
+    top_left_corner(a,y1)
+    bottom_right_corner(a,y1)
+
+    top_right_corner(a,y2)
+    bottom_left_corner(a,y2)
+    top_left_corner(a,y2)
+    bottom_right_corner(a,y2)
+    
+    top_right_corner(x2,y2)
+    bottom_left_corner(x2,y2)
+    top_left_corner(x2,y2)
+    bottom_right_corner(x2,y2)
+
+    top_right_corner(x1,y2)
+    bottom_left_corner(x1,y2)
+    top_left_corner(x1,y2)
+    bottom_right_corner(x1,y2)
+}
+
+function zombie_wall(){
+    var geo_extra_wall = new THREE.BoxGeometry( wall_height, wall_space, wall_width );
+    var plane = new THREE.Mesh(geo_extra_wall, texture);
+    plane.rotation.z=THREE.Math.degToRad(-90);
+    plane.position.set(500, 50, -333)
+    plane.receiveShadow = true;
+    plane.castShadow = true
+    scene.add(plane)
+
+    // var geo_extra_wall = new THREE.BoxGeometry( wall_height, wall_space, wall_width );
+    var plane2 = new THREE.Mesh(geo_extra_wall, texture);
+    plane2.rotation.z=THREE.Math.degToRad(-90);
+    plane2.position.set(500, 50, -704.5)
+    plane2.receiveShadow = true;
+    plane2.castShadow = true
+    scene.add(plane2)
+
+    var plane3 = new THREE.Mesh(geo_extra_wall, texture);
+    plane3.rotation.z=THREE.Math.degToRad(-90);
+    plane3.position.set(1020, 50, -704.5)
+    plane3.receiveShadow = true;
+    plane3.castShadow = true
+    scene.add(plane3)
+
+    var plane4 = new THREE.Mesh(geo_extra_wall, texture);
+    plane4.rotation.z=THREE.Math.degToRad(-90);
+    plane4.position.set(1020, 50, -333)
+    plane4.receiveShadow = true;
+    plane4.castShadow = true
+    scene.add(plane4)    
+
+    var geo_extra_wall_2 = new THREE.BoxGeometry( wall_height, wall_space*2, wall_width );
+
+    var plane5 = new THREE.Mesh(geo_extra_wall_2, texture);
+    plane5.rotation.z=THREE.Math.degToRad(-90);
+    plane5.position.set(780, 50, -704.5)
+    plane5.receiveShadow = true;
+    plane5.castShadow = true
+    scene.add(plane5)
+
+    var plane6 = new THREE.Mesh(geo_extra_wall_2, texture);
+    plane6.rotation.z=THREE.Math.degToRad(-90);
+    plane6.position.set(780, 50, -333)
+    plane6.receiveShadow = true;
+    plane6.castShadow = true
+    scene.add(plane6)
+
+    var plane7 = new THREE.Mesh(geo_extra_wall, texture);
+    plane7.rotation.z=THREE.Math.degToRad(-90);
+    plane7.rotation.y=THREE.Math.degToRad(-90);
+    plane7.position.set(1220, 50, -500)
+    plane7.receiveShadow = true;
+    plane7.castShadow = true
+    scene.add(plane7)
+
+    collidableMeshList.push(plane)
+    collidableMeshList.push(plane2)
+    collidableMeshList.push(plane3)
+    collidableMeshList.push(plane4)
+    collidableMeshList.push(plane5)
+    collidableMeshList.push(plane6)
+    collidableMeshList.push(plane7)
+}
+
+function final_wall(){
+    var geo_extra_wall = new THREE.BoxGeometry( wall_height, wall_space, wall_width );
+    var plane = new THREE.Mesh(geo_extra_wall, texture);
+    plane.rotation.z=THREE.Math.degToRad(-90);
+    plane.position.set(2055, 50, 185)
+    plane.receiveShadow = true;
+    plane.castShadow = true
+    scene.add(plane)
+
+    // var geo_extra_wall = new THREE.BoxGeometry( wall_height, wall_space, wall_width );
+    var plane2 = new THREE.Mesh(geo_extra_wall, texture);
+    plane2.rotation.z=THREE.Math.degToRad(-90);
+    plane2.position.set(500, 50, -704.5)
+    plane2.receiveShadow = true;
+    plane2.castShadow = true
+    plane2.position.set(2055, 50, -185)
+    scene.add(plane2)
+
+    collidableMeshList.push(plane)
+    collidableMeshList.push(plane2)
+}
+
+final_wall()
+
+function hugger_wall(){
+    var geo_extra_wall = new THREE.BoxGeometry( wall_height, wall_space, wall_width );
+    var geo_extra_wall_2 = new THREE.BoxGeometry( wall_height, wall_space*2, wall_width );
+
+    var plane = new THREE.Mesh(geo_extra_wall, texture);
+    plane.rotation.z=THREE.Math.degToRad(-90);
+    plane.position.set(1550, 50, 1365)
+    plane.receiveShadow = true;
+    plane.castShadow = true
+    scene.add(plane)
+
+    var plane2 = new THREE.Mesh(geo_extra_wall, texture);
+    plane2.rotation.z=THREE.Math.degToRad(-90);
+    plane2.position.set(1050, 50, 1365)
+    plane2.receiveShadow = true;
+    plane2.castShadow = true
+    scene.add(plane2)
+
+    var plane3 = new THREE.Mesh(geo_extra_wall_2, texture);
+    plane3.rotation.z=THREE.Math.degToRad(-90);
+    plane3.position.set(1290, 50, 1365)
+    plane3.receiveShadow = true;
+    plane3.castShadow = true
+    scene.add(plane3)
+
+    var plane4 = new THREE.Mesh(geo_extra_wall, texture);
+    plane4.rotation.z=THREE.Math.degToRad(-90);
+    plane4.rotation.y=THREE.Math.degToRad(-90);
+    plane4.position.set(1740, 50, 1570)
+    plane4.receiveShadow = true;
+    plane4.castShadow = true
+    scene.add(plane4)
+
+    collidableMeshList.push(plane)
+    collidableMeshList.push(plane2)
+    collidableMeshList.push(plane3)
+    collidableMeshList.push(plane4)
+
+}
+
+function build_maze(shape){
+    var x = path_width/2 + wall_length*2 + 2*wall_height/2 + path_width*8
+
+    inner_sqaure(x*0,0)
+
+    for(var i = 0; i < shape; i++){
+        for(var j = 0; j < shape; j++){
+            if (i != 0 || j != 0)    
+                inner_sqaure((3*x)*i,(3*x)*j)        
+        }   
+    }
+
+    for(var i = 0; i < shape; i++){
+        for(var j = 0; j < shape; j++){
+            if (i != 0 || j!= 0)    
+                inner_sqaure(-(3*x)*i,(3*x)*j)        
+        }   
+    }
+
+    for(var i = 0; i < shape; i++){
+        for(var j = 0; j < shape; j++){
+            if (i != 0 || j!= 0)    
+                inner_sqaure((3*x)*i,-(3*x)*j)        
+        }   
+    }
+
+    for(var i = 0; i < shape; i++){
+        for(var j = 0; j < shape; j++){
+            if (i != 0 || j != 0)    
+                inner_sqaure(-(3*x)*i,-(3*x)*j)        
+        }   
+    }
+
+    zombie_wall()
+    hugger_wall()
+    floor()
+}
+
+var player = { height: 1.8, speed: 15, turnSpeed: Math.PI * 0.03 };
+
+
+function addLight(model_name){
+    let cameraPosition = new THREE.Vector3(camera.position.x, camera.position.y, camera.position.z); 
+    
+    const spotLight = new THREE.SpotLight("white", 5)
+    spotLight.castShadow = true;
+    spotLight.shadow.mapSize.width = 100;
+    spotLight.shadow.mapSize.height = 100;
+
+    spotLight.shadow.camera.near = 0.5;
+    spotLight.shadow.camera.far = 20
+    spotLight.penumbra = 1
+    spotLight.distance = 500;
+
+    // spotLight.position.copy(cameraPosition);
+    // spotLight.position.set(x+60,-100,z)
+    spotLight.castShadow = true
+    const model = getObjectByName(model_name);
+    // model.visible = !model.visible
+    spotLight.target = model
+    let model_position = new THREE.Vector3(model.position.x, model.position.y+30, model.position.z);
+    spotLight.position.copy(model_position);
+    const spotLight_name = model_name.concat("_light")
+    // console.log(spotLight_name)
+    let model_spotlight = getObjectByName(spotLight_name);
+    if (!model_spotlight){
+        spotLight.name = spotLight_name
+        scene.add(spotLight)
+    }
+
+    return spotLight
+ 
+    
+
+    // setTimeout(() => {
+    //     scene.remove(spotLight)
+    //     model.visible = false
+    // }, 10000);
+    
+}
+const listener = new THREE.AudioListener();
+camera.add( listener );
+
+const sound = new THREE.PositionalAudio( listener );
+
+const audioLoader = new THREE.AudioLoader();
+const sounds = {};
+const clickList = []
+
+let huggy, zombie, zombie_idle, candle, cupboard, hugger, hugger_idle,demon
+let zombie_path = []
+
+
+build_maze(2)
+const spot = new THREE.AmbientLight(0xffffff, 8)
+// scene.add(spot)
+live()
+
+
+
+function instruction_paper(){
+    var geo_paper = new THREE.BoxGeometry( 30, 35, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/instructions.png') //change this to clue
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const instruction_paper = new THREE.Mesh(geo_paper, texture_paper_visible);
+    instruction_paper.rotation.y += THREE.Math.degToRad(90)
+    instruction_paper.position.set(-175,25,60)
+    instruction_paper.name = "instruction_paper"
+    scene.add(instruction_paper)
+
+    lighting(-172,25,60,0.4,0.1,300)
+    clickList.push(instruction_paper)
+}
+instruction_paper()
+
+function calendar_paper(){
+    var geo_paper = new THREE.BoxGeometry( 30, 35, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/calendar.png') //change this to clue
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const calendar_paper = new THREE.Mesh(geo_paper, texture_paper_visible);
+    //calendar_paper.rotation.y += THREE.Math.degToRad(90)
+    calendar_paper.position.set(2160,25,-860)
+    calendar_paper.name = "calendar_paper"
+    scene.add(calendar_paper)
+
+    lighting(-172,25,60,0.4,0.1,300)
+    clickList.push(calendar_paper)
+}
+calendar_paper()
+
+
+function cybermart_paper(){
+    var geo_paper = new THREE.BoxGeometry( 80, 80, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/noball.PNG') //change this to clue
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const cybermart_paper = new THREE.Mesh(geo_paper, texture_paper_visible);
+    cybermart_paper.rotation.y += THREE.Math.degToRad(90)
+    cybermart_paper.position.set(-175,25,-80)
+    cybermart_paper.name = "cybermart_paper"
+    scene.add(cybermart_paper)
+
+    // lighting(-172,25,-80,0.8,0.1,300)
+    clickList.push(cybermart_paper)
+}
+cybermart_paper()
+
+function fsa_logo(){
+    var geo_paper = new THREE.BoxGeometry( 80, 80, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/FSA.png') //change this to clue
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const fsa_logo = new THREE.Mesh(geo_paper, texture_paper_visible);
+    fsa_logo.rotation.y += THREE.Math.degToRad(90)
+    fsa_logo.position.set(-175,25,130)
+    fsa_logo.name = "fsa_logo"
+    scene.add(fsa_logo)
+
+    // lighting(-172,25,-80,0.8,0.1,300)
+    clickList.push(fsa_logo)
+}
+fsa_logo()
+
+function clue_paper(){
+    var geo_paper = new THREE.BoxGeometry( 30, 35, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/paper_clue.png') //change this to clue
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const clue_paper = new THREE.Mesh(geo_paper, texture_paper_visible);
+    // paper_visible.rotation.y += THREE.Math.degToRad(90)
+    clue_paper.position.set(-900,25,322)
+    clue_paper.name = "clue_paper"
+    scene.add(clue_paper)
+
+    // lighting(-900,25,322,0.4,0.1,400)
+    clickList.push(clue_paper)
+}
+//clue_paper()
+
+function scribble_paper(){
+    var geo_paper = new THREE.BoxGeometry( 30, 35, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/scribble_paper.png') //change this to scribble
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const scribble_paper = new THREE.Mesh(geo_paper, texture_paper_visible);
+    // paper_visible.rotation.y += THREE.Math.degToRad(90)
+    scribble_paper.position.set(-1040,25,-1180)
+    scribble_paper.name = "scribble_paper"
+    scene.add(scribble_paper)
+
+    lighting(-1040,25,-1180,0.4,0.1,400)
+    clickList.push(scribble_paper)
+}
+scribble_paper()
+
+function clue_poster(){
+    var geo_paper = new THREE.BoxGeometry( 30, 35, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/demon_paper.png') //change this to clue
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const poster = new THREE.Mesh(geo_paper, texture_paper_visible);
+    // paper_visible.rotation.y += THREE.Math.degToRad(90)
+    poster.position.set(400,25,-324)//410,50,-260
+    poster.name = "poster"
+    scene.add(poster)
+    //410,50,-250
+    // lighting(400,25,-324,0.4,0.1,400)
+    clickList.push(poster)
+}
+clue_poster()
+
+function new_clue1(){
+    var geo_paper = new THREE.BoxGeometry( 30, 35, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/paper.PNG') //change this to clue
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const poster = new THREE.Mesh(geo_paper, texture_paper_visible);
+    // paper_visible.rotation.y += THREE.Math.degToRad(90)
+    poster.position.set(2160,75,-860)//410,50,-260
+    poster.name = "newclue1"
+    scene.add(poster)
+    //410,50,-250
+    // lighting(400,25,-324,0.4,0.1,400)
+    clickList.push(poster)
+}
+new_clue1()
+
+function new_clue2(){
+    var geo_paper = new THREE.BoxGeometry( 30, 35, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/test.JPG') //change this to clue
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const poster = new THREE.Mesh(geo_paper, texture_paper_visible);
+    poster.rotation.y += THREE.Math.degToRad(90)
+    poster.position.set(-1230,25,-80)//410,50,-260
+    poster.name = "newclue2"
+    scene.add(poster)
+    //410,50,-250
+    // lighting(400,25,-324,0.4,0.1,400)
+    clickList.push(poster)
+}
+new_clue2()
+
+function new_clue3(){
+    var geo_paper = new THREE.BoxGeometry( 30, 35, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/newclue1.PNG') //change this to clue
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const poster = new THREE.Mesh(geo_paper, texture_paper_visible);
+    //poster.rotation.y += THREE.Math.degToRad(90)
+    poster.position.set(-1920,25,718)//410,50,-260
+    poster.name = "newclue3"
+    scene.add(poster)
+    //410,50,-250
+    // lighting(400,25,-324,0.4,0.1,400)
+    clickList.push(poster)
+}
+//new_clue3()
+
+function new_clue4(){
+    var geo_paper = new THREE.BoxGeometry( 30, 35, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/scribble_paper.PNG') //change this to clue
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const poster = new THREE.Mesh(geo_paper, texture_paper_visible);
+    poster.rotation.y += THREE.Math.degToRad(90)
+    poster.position.set(-1378,25,-1150)//410,50,-260
+    poster.name = "newclue4"
+    scene.add(poster)
+    //410,50,-250
+    // lighting(400,25,-324,0.4,0.1,400)
+    clickList.push(poster)
+}
+new_clue4()
+
+function morse_paper(){
+    var geo_paper = new THREE.BoxGeometry( 30, 35, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/1morse4.png') //change this to clue
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const morse_paper = new THREE.Mesh(geo_paper, texture_paper_visible);
+    morse_paper.rotation.y += THREE.Math.degToRad(90)
+    morse_paper.position.set(-1378,75,-1150)
+    morse_paper.name = "morse_paper"
+    scene.add(morse_paper)
+
+    lighting(-172,25,60,0.4,0.1,300)
+    clickList.push(morse_paper)
+}
+morse_paper()
+
+
+function demon_clue(){
+    var geo_paper = new THREE.BoxGeometry( 30, 35, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/demon_clue.png') //change this to clue
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    const demon_clue = new THREE.Mesh(geo_paper, texture_paper_visible);
+    // paper_visible.rotation.y += THREE.Math.degToRad(90)
+    demon_clue.position.set(-1212,25,1150)//410,50,-260
+    demon_clue.name = "demon_clue"
+    demon_clue.rotation.y += THREE.Math.degToRad(90)
+    scene.add(demon_clue)
+    //410,50,-250
+    lighting(-1212,25,1150,0.4,0.1,300)
+    clickList.push(demon_clue)
+}
+//demon_clue()
+
+
+
+let model_hugger,animations_hugger,model_zombie,animations_zombie,bunny,bunny2,body,door
+
+
+function addModelBoundary(name,box_scale,x,y,z){
+    const transparentMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ff00,
+        transparent: true,
+        opacity: 0,
+    });
+    
+    const transparentBoxGeometry = new THREE.BoxGeometry(0.01, box_scale, box_scale);
+    const transparentBox = new THREE.Mesh(transparentBoxGeometry, transparentMaterial);
+    transparentBox.position.set(x,y,z)
+    transparentBox.name = name.concat("-box")
+    scene.add(transparentBox);
+    collidableMeshList.push(transparentBox)
+
+}
+
+function addModel(model_file,name,x,y,z,scale,visibility,animation_num,sound_file,volume) {
+    return new Promise((resolve, reject) => {
+        let sound_name = sound_file
+        if(sound_file === '-'){
+            sound_name = "zombie.mp3"
+        }
+
+        audioLoader.load('assets/sounds/'.concat(sound_name), function (buffer) {
+        if(sound_file != '-'){
+            sound.setBuffer( buffer );
+            sound.setRefDistance( 100 );
+            sound.setMaxDistance( 150 );
+            sound.setLoop(true);
+            sound.setVolume(volume);
+            sound.playbackRate = 1.2;
+        }
+            // if(name === "dark_man"){
+            //     setTimeout(function() {
+            //     },timeout);
+            // }
+            // sounds[name] = sound;
+            
+            loader.load('assets/models/'.concat(model_file), (gltf) => {
+                const model = gltf.scene;
+                model.visible = visibility;
+                model.add(sound)
+                model.name = name
+                scene.add(model);
+                
+                if(name != "door")
+                    model.scale.set(scale, scale, scale);
+                else
+                    model.scale.set(scale+0.5, scale, scale);
+                model.position.set(x, y, z);
+                model.receiveShadow = true;
+                const animations = gltf.animations;
+
+            
+                if (animations && animations.length > 0) {
+                    const mixer = new THREE.AnimationMixer(model);
+                    const action = mixer.clipAction(animations[animation_num]);
+                    // console.log(animations.length)
+                    action.timeScale = 1.0;
+
+                    if(name === "hugger" || name === "zombie" || name === "bunny" || name === "bunny2")
+                        action.timeScale = 4.0;
+                    else if(name === "hugger_idle")
+                        action.timeScale = 0;
+                        
+                    action.play()
+                
+                    function animate() {
+                        requestAnimationFrame(animate);
+                        mixer.update(0.016);
+                        renderer.render(scene, camera);
+                    }
+                
+                    animate();
+                }
+
+                resolve(modelsArray, collidableMeshList);
+            }
+        )}, undefined, reject);
+    
+    }
+    );
+}
+
+function getObjectByName(objectName) {
+    let foundObject = null;
+
+    // Traverse the scene's children
+    scene.traverse((child) => {
+        // Check if the child has the specified name
+        if (child.name === objectName) {
+            foundObject = child;
+        }
+    });
+
+    return foundObject;
+}
+
+document.getElementById("message").style.visibility = "hidden";
+document.getElementById("section").style.visibility = "hidden";   
+
+function add_text(text){
+    const loader = new THREE.FontLoader();
+
+// Load a font
+loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function(font) {
+    // Create text geometry
+    const textGeometry = new THREE.TextGeometry(text, {
+        font: font,
+        size: 10,
+        height: 1,
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.5,
+        bevelSize: 0.2,
+        bevelOffset: 0,
+        bevelSegments: 5
+    });
+
+    // Create a material for the text
+    const textMaterial = new THREE.MeshPhongMaterial({
+        color: 0xffffff, // Dark red color
+        shininess: 100,
+        // Add additional material properties as needed
+    });
+    const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+    textMesh.rotation.y += THREE.Math.degToRad(90)
+    // Position the text
+    textMesh.position.set(-170, 50, 110);
+
+    // Add the text mesh to the scene
+    scene.add(textMesh);
+});
+}
+// add_text("Click Here")
+
+function display_alert(text, timeout){
+    document.getElementById("message").style.visibility = "visible";
+    document.getElementById("section").style.visibility = "visible";
+    document.getElementById("message").innerHTML = text
+
+    if(timeout != -1){
+        setTimeout(function() {
+            document.getElementById("message").style.visibility = "hidden";
+            document.getElementById("section").style.visibility = "hidden";  
+            document.getElementById("message").innerHTML = ""  
+        },timeout);
+    }
+}
+
+
+(async () => {
+    // dynamic_audio("my-evil-laugh.mp3",60000,5)
+    // dynamic_audio("scary-laugh.mp3",60000,5)
+
+    // //// bunny
+    // await addModel("vanny.glb","bunny2",-1800,0,260,20,false,5,"evil-laughing.mp3",10);
+    // await addModel("vanny.glb","bunny",0,0,260,20,false,5,"evil-laughing.mp3",10);
+    // addModelBoundary("bunny",140,-900,50,260)
+    // addModelBoundary("bunny2",140,-890,50,260)
+
+    // bunny = getObjectByName("bunny") 
+    // bunny.rotation.y += THREE.Math.degToRad(-90);
+    // bunny2 = getObjectByName("bunny2") 
+    // bunny2.rotation.y += THREE.Math.degToRad(90);
+    // ////
+
+    //// chess
+    // await addModel("decorative_chess_compressed.glb","chess",1150,-10,-600,70,true,0,"evil-laughing.mp3",10);
+    // let chess = getObjectByName('chess')
+    // addModelBoundary("chess",200,1050,50,-600)
+    // addModelBoundary("chess2",200,1120,50,-500)
+    // let chess2 = getObjectByName("chess2-box")
+    // chess2.rotation.y += THREE.Math.degToRad(90)
+
+    ///body
+    // await addModel("dead_body.glb","body",1150,-20,-400,15,true,0,"evil-laughing.mp3",10);
+    // addLight("body")
+    // body = getObjectByName("body")
+    // body.rotation.y += THREE.Math.degToRad(90)
+    // let body_light = getObjectByName("body_light")
+    // body_light.position.y += 120
+    // body_light.position.z -= 400
+
+    // const body_spotLight = new THREE.SpotLight("white", 2)
+    // body_spotLight.castShadow = true;
+    // body_spotLight.shadow.mapSize.width = 100;
+    // body_spotLight.shadow.mapSize.height = 100;
+
+    // body_spotLight.shadow.camera.near = 0.5;
+    // body_spotLight.shadow.camera.far = 20
+    // body_spotLight.penumbra = 1
+    // body_spotLight.distance = 500;
+
+    // // body_spotLight.position.copy(cameraPosition);
+    // // body_spotLight.position.set(x+60,-100,z)
+    // body_spotLight.castShadow = true
+    // body_spotLight.target = body
+    // body_spotLight.position.set(1150,80,-400)
+    // scene.add(body_spotLight)
+
+    // // let chess = getObjectByName('chess')
+    // addModelBoundary("body",120,1070,0,-390)
+    // addModelBoundary("body2",150,1120,0,-440)
+    // let body2 = getObjectByName("body2-box")
+    // body2.rotation.y += THREE.Math.degToRad(90)
+    ////
+
+    //// dark man
+    // await addModel("dark_man.glb","dark_man",2050,0,-250,50,false,0,"evil-laughing.mp3",10);
+    // await addModel("dark_man.glb","dark_man2",-1000,0,-250,50,false,0,"evil-laughing.mp3",10);
+    // addModelBoundary("dark_man",128,410,50,-260)
+    // addModelBoundary("dark_man2",128,400,50,-260)
+
+
+    // let dark_man = getObjectByName("dark_man")
+    // dark_man.rotation.y += THREE.Math.degToRad(-90)
+    // let dark_man2 = getObjectByName("dark_man2")
+    // dark_man2.rotation.y += THREE.Math.degToRad(90)
+
+    // let dark_man_box = getObjectByName("dark_man-box")
+    // let dark_man_box2 = getObjectByName("dark_man2-box")
+
+    // // ////
+    // await addModel("scary-huggy-vent.glb","huggy",550,-20,0,500,true,0,"evil-laughing.mp3",10); //180,-550
+    // huggy = getObjectByName("huggy")
+    // huggy.rotation.y += THREE.Math.degToRad(-90)
+    // // /////
+    
+//    // await addModel("huggy_woggy_vent_chase_model/scene.gltf","hugger",1100,-20,1550,50,true,0,"evil-laughing.mp3",10); //180,-550
+//    // await addModel("huggy_woggy_vent_chase_model/scene.gltf","hugger",1100,-20,1550,350,true,0,"evil-laughing.mp3",10); //180,-550
+
+//    // hugger = getObjectByName("hugger")
+//    // hugger.rotation.y += THREE.Math.degToRad(180)
+
+
+    await addModel("hallucination_huggy.glb","hugger_idle",1000,20,1550,500,true,2,"-",10); //180,-550
+    hugger_idle = getObjectByName("hugger_idle")
+    hugger_idle.rotation.y += THREE.Math.degToRad(180)
+
+    await addModel("hallucination_huggy.glb","hugger",1000,-20,1550,500,true,1,"-",10); //180,-550
+    hugger = getObjectByName("hugger")
+    hugger.visible = false
+    hugger.rotation.y += THREE.Math.degToRad(-90)
+    addModelBoundary("hugger",350,900,50,1550)
+
+    ////////////// ZOMBIE
+    // await addModel("scp-096.glb","zombie-idle",550,-20,-520,50,true,4,"evil-laughing.mp3",10)
+    // zombie_idle = getObjectByName("zombie-idle")
+    // zombie_idle.rotation.y += THREE.Math.degToRad(-90)
+    // addModelBoundary("zombie",350,420,50,-520)
+
+    // // addModelBoundary("zombie",100,540,50,-410)
+    // let zombie_box = getObjectByName("zombie-box")
+    // zombie_box.rotation.y += THREE.Math.degToRad(90)
+    // await addModel("scp-096.glb","zombie",550,-20,-520,50,true,9,"evil-laughing.mp3",10)
+    // zombie = getObjectByName("zombie")
+    // zombie.visible = false
+    ////////////////
+
+    //// addModelBoundary("zombie2",100,540,50,-700)
+    //// zombie_box = getObjectByName("zombie2-box")
+    //// zombie_box.rotation.y += THREE.Math.degToRad(90)
+    ////addModelBoundary("zombie4",100,690,50,-550)
+    
+
+    // ///// CUPBOARD AND CANDLE
+    // await addModel("cupboard_compressed.glb","cupboard",1720,30,1700,0.6,true,0,"evil-laughing.mp3",10)
+    // cupboard = getObjectByName("cupboard")
+    // cupboard.rotation.y += THREE.Math.degToRad(180) 
+
+    // await addModel("candle.glb","candle",1725,15,1680,0.05,true,0,"evil-laughing.mp3",10)
+    // candle = getObjectByName("candle")
+    // candle.rotation.y += THREE.Math.degToRad(90) 
+    ////////////
+    // if(huggy){
+    //     start = model1[model1_index][0]
+    //     end = model1[model1_index][1]
+    //     model1_count = start        
+    //     if(model1[model1_index][3] === "x"){
+    //         huggy.position.x = start
+    //     }
+    //     else{
+    //         huggy.position.z = start
+    //     }
+    // }
+
+    ///// clown
+    // await addModel("clown.glb","clown",-1100,-20,1100,5000,true,0,"evil-laughing.mp3",10);
+    // clown = getObjectByName("clown")
+    // clown.rotation.y += THREE.Math.degToRad(180)
+    // clickList.push(clown)
+    // console.log(clickList)
+    ///////
+    
+    
+
+    /////// demon
+    // await addModel("sad_old_demon_compressed.glb","demon",-1200,-20,1200,20,true,0,"evil-laughing.mp3",10);
+    // demon = getObjectByName("demon")
+    // demon.rotation.y += THREE.Math.degToRad(45)
+    // addModelBoundary("demon",100,-1150,0,1170)
+    // addModelBoundary("demon2",100,-1170,0,1120)
+    // let demon2 = getObjectByName("demon2-box")
+    // demon2.rotation.y += THREE.Math.degToRad(90)
+    // // ///////
+    await addModel("door_compressed.glb","door",1900,-30,-20,1.8,true,0,"-",10);
+    door = getObjectByName("door")
+    // collidableMeshList.push(door)
+    door.rotation.y += THREE.Math.degToRad(90)
+    addModelBoundary("door",200,1880,80,0)
+    //////
+
+    // clickList.push(demon)
+    // console.log(demon)
+    await addModel("goat.glb","satan",2150,80,0,5,true,0,"-",10);
+    let satan = getObjectByName("satan")
+    satan.rotation.y += THREE.Math.degToRad(-90)
+    addLight("satan")
+    let satan_light = getObjectByName("satan_light")
+    satan_light.position.y += 80
+    satan_light.position.x -= 50
+    satan_light.target = satan
+    addModelBoundary("satan",150,2100,50,0)
+    /////////
+    
+    // addLight("taunt")
+    // await addModel("fallen_angel.glb","angel",0,20,0,1,true,4,"evil-laughing.mp3",10);
+    // let angel = getObjectByName("angel")
+    // angel.rotation.x += THREE.Math.degToRad(90)
+
+
+    // await addModel("devil_on_a_throne.glb","devil",0,-20,0,0.5,true,0,"evil-laughing.mp3",10);
+
+    // await addModel("monster_dogday_-_poppy_playtime.glb","monster_dogday_-_poppy_playtime",0,0,0,30,true,1,"evil-laughing.mp3",10); //0 or 1 animation
+   
+})();
+
+let cameraPosition = new THREE.Vector3(camera.position.x, -50, camera.position.z); 
+let targetPosition = new THREE.Vector3(cameraPosition.x-lightTurn, 50, cameraPosition.z); 
+let temp_sound_var = 0
+let zombie_angle = THREE.Math.degToRad(90)
+let hugger_angle = THREE.Math.degToRad(90)
+
+let zombie_enable = 1
+let zombie_follow = 0
+var paper_visible,paper_semi_visible,hugger_follow = 0
+
+function candle_paper(){
+    var geo_paper = new THREE.BoxGeometry( 10, 15, 0.1 );
+    var textureLoader = new THREE.TextureLoader()
+    var customTexture_paper_visible = textureLoader.load('assets/images/paper_visible.png')
+    var customTexture_paper_semi_visible = textureLoader.load('assets/images/paper_semi_visible.png')
+    const texture_paper_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_visible,
+    })
+    paper_visible = new THREE.Mesh(geo_paper, texture_paper_visible);
+    paper_visible.rotation.y += THREE.Math.degToRad(90)
+    paper_visible.position.set(1725,25,1697)
+    paper_visible.name = "paper_visible"
+    scene.add(paper_visible)
+
+    const texture_paper_semi_visible = new THREE.MeshStandardMaterial({ 
+        map: customTexture_paper_semi_visible,
+    })
+
+    paper_semi_visible = new THREE.Mesh(geo_paper, texture_paper_semi_visible);
+    paper_semi_visible.position.set(1725,25,1697)
+    paper_semi_visible.rotation.y += THREE.Math.degToRad(90)
+    paper_semi_visible.name = "paper_semi_visible"
+    scene.add(paper_semi_visible)
+
+    lighting(1705,28,1680,0.8,0.1,600)
+}
+candle_paper()
+let candle_flame = getObjectByName("candle_flame")
+let clock, clock_hugger
+
+
+function intersection(direction, distance) {
+    const raycaster = new THREE.Raycaster(camera.position, direction);
+    raycaster.far = distance;
+
+    // Check for intersections
+    const intersections = raycaster.intersectObjects(collidableMeshList, true);
+    // console.log(collidableMeshList)
+    if (intersections.length > 0) {
+        // console.log(intersections)
+        if (intersections[0].object.name === "bunny-box"){
+            // const model = getObjectByName("bunny");
+
+            if (bunny) {
+                bunny.visible = true;
+                start_bunny = true
+                let bunny_box2 = getObjectByName("bunny2-box")
+                scene.remove(bunny_box2)
+                collidableMeshList.pop(bunny_box2)
+                let bunny_box = getObjectByName("bunny-box")
+                scene.remove(bunny_box)
+                collidableMeshList.pop(bunny_box)
+                addLight("bunny");
+                scene.remove(bunny2)
+                torch_on = 0
+                spotLight.intensity = 0
+            }
+        } 
+
+        else if (intersections[0].object.name === "bunny2-box"){
+            // const model = getObjectByName("bunny2");
+
+            if (bunny2) {
+                bunny2.visible = true;
+                start_bunny2 = true
+                let bunny_box2 = getObjectByName("bunny2-box")
+                scene.remove(bunny_box2)
+                collidableMeshList.pop(bunny_box2)
+                let bunny_box = getObjectByName("bunny-box")
+                scene.remove(bunny_box)
+                collidableMeshList.pop(bunny_box)
+                addLight("bunny2");
+                scene.remove(bunny)
+                torch_on = 0
+                spotLight.intensity = 0
+            }
+        }
+    
+        else if (intersections[0].object.name === "dark_man2-box"){
+            const model = getObjectByName("dark_man");
+            // console.log(model)
+            if (model) {
+                dark_man = true
+                let dark_man_box2 = getObjectByName("dark_man2-box")
+                scene.remove(dark_man_box2)
+                collidableMeshList.pop(dark_man_box2)
+                let dark_man_box = getObjectByName("dark_man-box")
+                scene.remove(dark_man_box)
+                collidableMeshList.pop(dark_man_box)
+                addLight("dark_man");
+                torch_on = 0
+                spotLight.intensity = 0
+            }
+        }
+
+        else if (intersections[0].object.name === "dark_man-box"){
+            const model = getObjectByName("dark_man2");
+            // console.log(model)
+            if (model) {
+                dark_man2 = true
+                let dark_man_box2 = getObjectByName("dark_man2-box")
+                scene.remove(dark_man_box2)
+                collidableMeshList.pop(dark_man_box2)
+                let dark_man_box = getObjectByName("dark_man-box")
+                scene.remove(dark_man_box)
+                collidableMeshList.pop(dark_man_box)
+                addLight("dark_man2");
+                torch_on = 0
+                spotLight.intensity = 0
+            }
+        }
+
+        else if (intersections[0].object.name === "zombie-box"){
+            // if(hugger_hit != 1){
+                zombie_follow = 1    
+                let box = getObjectByName("zombie-box");
+                scene.remove(box)
+                collidableMeshList.pop(box)
+                // console.log("hit",5000)
+                clock = new THREE.Clock();   
+                 
+            // }
+
+
+            function temp(){
+                console.log(123)
+            }
+            
+            (async()=>{
+                
+                
+                
+                
+                // // remove_boxes()
+                // zombie = getObjectByName("zombie")
+                
+                if(zombie){
+                    zombie.rotation.y += THREE.Math.degToRad(-90)
+                    zombie_move = 1
+                    display_alert("RUN",2000)
+                    dynamic_audio("zombie.mp3",60000,5)
+                }
+                
+
+            })();
+        }
+//hugger_idle
+        else if (intersections[0].object.name === "hugger-box"){
+        // if(hugger_hit != 1){
+            hugger_follow = 1    
+
+            let box = getObjectByName("hugger-box");
+            scene.remove(box)
+            collidableMeshList.pop(box)
+            // console.log("hit",2000)
+            clock_hugger = new THREE.Clock();   
+                
+        // }
+
+
+            // function temp(){
+            //     console.log(123)
+            // }
+            
+            // (async()=>{
+                
+                
+                hugger = getObjectByName("hugger")
+                
+                // // remove_boxes()
+                // hugger = getObjectByName("hugger")
+                
+                if(hugger){
+                    
+                    // hugger.rotation.y += THREE.Math.degToRad(180)
+                    // hugger.rotation.y += THREE.Math.degToRad(-90)
+                    hugger_move = 1
+                    display_alert("RUN",2000)
+                    // scene.remove(hugger_idle)
+                   
+                }
+                
+
+            // })();
+        }
+        return true;
+    }
+
+    return false;
+}
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let movement=1, demon_passed=0, door_passed=0
+
+function onMouseClick(event) {
+    // Calculate mouse coordinates
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(scene.children, true);
+    
+    if (intersects.length > 0) {
+        // console.log(intersects[0])
+        if(intersects[0].object.name === "chess2-box" || intersects[0].object.name === "chess-box"){
+            const clickedObject = getObjectByName("chess")
+            // console.log(clickedObject)
+            const imageUrl = 'assets/images/chess.png';
+
+            onObjectClick(imageUrl,'80%','auto')
+        }     
+        else if(intersects[0].object.name === "clue_paper"){
+            const clickedObject = getObjectByName("clue_paper")
+            // console.log(clickedObject)
+            const imageUrl = 'assets/images/paper_clue.png';
+
+            onObjectClick(imageUrl,'80%','auto')
+        }  
+        else if(intersects[0].object.name === "instruction_paper"){
+            const clickedObject = getObjectByName("instruction_paper")
+            // console.log(clickedObject)
+            const imageUrl = 'assets/images/instructions.png';
+
+            onObjectClick(imageUrl,'50%','90%',5000)
+        }  
+        else if(intersects[0].object.name === "morse_paper"){
+            const clickedObject = getObjectByName("morse_paper")
+            // console.log(clickedObject)
+            const imageUrl = 'assets/images/1morse4.png';
+
+            onObjectClick(imageUrl,'50%','90%',5000)
+        }  
+        else if(intersects[0].object.name === "calendar_paper"){
+            const clickedObject = getObjectByName("calendar_paper")
+            // console.log(clickedObject)
+            const imageUrl = 'assets/images/calendar1.png';
+
+            onObjectClick(imageUrl,'50%','90%',5000)
+        }  
+        else if(intersects[0].object.name === "poster"){
+            // const clickedObject = getObjectByName("poster")
+            // console.log(clickedObject)
+            // const imageUrl = 'assets/images/demon_paper.png';
+
+            // onObjectClick(imageUrl)
+            display_alert("3.You’ve seen me in pieces, scattered yet bold, Five red truths in the image you hold. To find my full name and break the spell, Seek where the shadows and paper dwell.",5000)
+        }
+        else if(intersects[0].object.name === "newclue1"){
+            // const clickedObject = getObjectByName("poster")
+            // console.log(clickedObject)
+            // const imageUrl = 'assets/images/demon_paper.png';
+
+            // onObjectClick(imageUrl)
+            display_alert("4. A treasure of knowledge holds what's seen. Match the truth with a little keen, Tell your guardian, your path shall turn.",5000)
+
+        }
+        else if(intersects[0].object.name === "newclue2"){
+            // const clickedObject = getObjectByName("poster")
+            // console.log(clickedObject)
+            // const imageUrl = 'assets/images/demon_paper.png';
+
+            // onObjectClick(imageUrl)
+            display_alert("Made by AR :)",5000)
+
+        }
+        else if(intersects[0].object.name === "newclue3"){
+            // const clickedObject = getObjectByName("poster")
+            // console.log(clickedObject)
+            // const imageUrl = 'assets/images/demon_paper.png';
+
+            // onObjectClick(imageUrl)
+            display_alert("AR was Here",5000)
+
+        }
+        else if(intersects[0].object.name === "newclue4"){
+            // const clickedObject = getObjectByName("poster")
+            // console.log(clickedObject)
+            // const imageUrl = 'assets/images/demon_paper.png';
+
+            // onObjectClick(imageUrl)
+            display_alert("1. I speak in dots, I speak in lines, My voice is old, but full of signs. To break my code, you must unlock What hides beneath the ticking clock.",5000)
+
+        }  
+        else if (intersects[0].object.name === "demon-box" || intersects[0].object.name === "demon2-box") {
+            display_alert("I was once the Devil's favorite DEMON...", 5000)
+            movement = 0
+            const input = document.createElement("input");
+            input.type = "text";
+            input.placeholder = "ENTER THE PASSWORD";
+            input.style.position = "absolute";
+            input.style.left = event.clientX + "px";
+            input.style.top = event.clientY + "px";
+            input.style.color = "#666"; // Light gray color
+            input.style.padding = "8px"; // Padding around the input text
+            input.style.border = "1px solid #ccc"; // Light gray border
+            input.style.borderRadius = "4px"; // Rounded corners
+            input.style.fontFamily = "Arial, sans-serif"; // Font family
+            input.style.fontSize = "14px"; // Font size
+            let userInput = ""; // Variable to store user input
+            
+            if (!demon_passed) {
+                input.addEventListener("input", (event) => {
+                    // Update userInput variable with the current value of the input
+                    userInput = event.target.value;
+                    if (userInput === "4976"){
+                        demon_passed = 1;
+                        let demon_box = getObjectByName("demon-box")
+                        let demon_box2 = getObjectByName("demon2-box")
+                        scene.remove(demon_box)
+                        scene.remove(demon_box2)
+                        collidableMeshList.pop(demon_box)
+                        collidableMeshList.pop(demon_box2)     
+                        demon_clue()                   
+                    } 
+                    // console.log(userInput, demon_passed);
+                });
+            
+                input.addEventListener("blur", () => {
+                    // Remove the input element when it loses focus
+                    if (document.body.contains(input)) {
+                        document.body.removeChild(input);
+                        movement = 1;
+                    }
+                    // Use the userInput variable here for further processing
+                    // console.log("User input:", userInput);
+                });
+            
+                // Add event listener for keypress
+                // input.addEventListener("keypress", (event) => {
+                //     // Check if Enter key is pressed (key code 13)
+                //     if (event.keyCode === 13) {
+                //         // Remove the input element if it exists
+                //         if (document.body.contains(input)) {
+                //             document.body.removeChild(input);
+                //             movement = 1;
+                //         }
+                //     }
+                // });
+            
+                // Add click event listener to document body
+                document.body.addEventListener("click", (event) => {
+                    // Check if the click occurred outside the input element
+                    if (!input.contains(event.target)) {
+                        // Remove the input element if it exists
+                        if (document.body.contains(input)) {
+                            document.body.removeChild(input);
+                            movement = 1;
+                        }
+                    }
+                });
+            
+                // Append the input element to the document body
+                document.body.appendChild(input);
+            
+                // Focus the input element
+                input.focus();
+            }
+        }
+        else if(intersects[0].object.name === "demon_clue" && demon_passed){
+            // const clickedObject = getObjectByName("instruction_paper")
+            // console.log(clickedObject)
+            const imageUrl = 'assets/images/demon_clue.png';
+
+            onObjectClick(imageUrl,'50%','90%')
+        }   
+        else if(intersects[0].object.name === "body-box" || intersects[0].object.name === "body2-box"){
+            display_alert("The chessboard stands, a stage to explore, The pieces placed, reveal much more.<br>In pages bound, a mystery found, Where characters align, secrets abound.", 5000)
+        }
+        else if(intersects[0].object.name === "scribble_paper"){
+            display_alert("LMAO", 5000)
+
+            // const clickedObject = getObjectByName("scribble_paper")
+            // console.log(clickedObject)
+            // const imageUrl = 'assets/images/scribble_paper.png';
+
+            // onObjectClick(imageUrl,'50%','90%')
+        }
+        else if (intersects[0].object.name === "door-box") {
+            display_alert("ENTER THE PASSWORD", 5000)
+            movement = 0
+            const input = document.createElement("input");
+            input.type = "text";
+            input.placeholder = "ENTER THE PASSWORD";
+            input.style.position = "absolute";
+            input.style.left = event.clientX + "px";
+            input.style.top = event.clientY + "px";
+            input.style.color = "#666"; // Light gray color
+            input.style.padding = "8px"; // Padding around the input text
+            input.style.border = "1px solid #ccc"; // Light gray border
+            input.style.borderRadius = "4px"; // Rounded corners
+            input.style.fontFamily = "Arial, sans-serif"; // Font family
+            input.style.fontSize = "14px"; // Font size
+            let userInput = ""; // Variable to store user input
+            
+            if (!door_passed) {
+                input.addEventListener("input", (event) => {
+                    // Update userInput variable with the current value of the input
+                    userInput = event.target.value;
+                    if (userInput === "4976"){
+                        door_passed = 1;
+                        let door_box = getObjectByName("door-box")
+                        // let demon_box2 = getObjectByName("demon2-box")
+                        scene.remove(door_box)
+                        scene.remove(door)
+                        collidableMeshList.pop(door_box)
+                        collidableMeshList.pop(door)     
+                        // demon_clue()                   
+                    } 
+                    // console.log(userInput, door_passed);
+                });
+            
+                input.addEventListener("blur", () => {
+                    if (document.body.contains(input)) {
+                        document.body.removeChild(input);
+                        movement = 1;
+                    }
+                });
+                document.body.addEventListener("click", (event) => {
+                    // Check if the click occurred outside the input element
+                    if (!input.contains(event.target)) {
+                        // Remove the input element if it exists
+                        if (document.body.contains(input)) {
+                            document.body.removeChild(input);
+                            movement = 1;
+                        }
+                    }
+                });
+            
+                // Append the input element to the document body
+                document.body.appendChild(input);
+            
+                // Focus the input element
+                input.focus();
+            }
+        }
+        if(intersects[0].object.name === "paper_visible" || intersects[0].object.name === "paper_semi_visible"){
+            // const clickedObject = getObjectByName("chess")
+            // console.log(clickedObject)
+            // const imageUrl = 'assets/images/candle_paper.png';
+
+            // onObjectClick(imageUrl,'80%','auto')
+            display_alert("2. A paper lies there, but nothing to see, It looks so plain just let it be? But shine the light that's cold and blue, And hidden words will speak to you.",5000)
+        } 
+        
+        if(intersects[0].object.name === "satan-box" && door_passed){
+            // const clickedObject = getObjectByName("chess")
+            // console.log(clickedObject)
+            // const imageUrl = 'assets/images/candle_paper.png';
+
+            // onObjectClick(imageUrl,'80%','auto')
+            display_alert("In shadows deep, where secrets hide, A precious phrase (FREE MY SOUL)<br>To gain your freedom, sacrifice must be made, Whisper over to the devil's lair",5000)
+        } 
+
+        
+    }
+}
+
+function dynamic_audio(sound_file, timeout, volume){
+    const listener_dynamic=new THREE.AudioListener();
+    camera.add( listener_dynamic);
+    const sound_dynamic = new THREE.Audio(listener_dynamic);
+    const audioLoader_dynamic = new THREE.AudioLoader();
+    audioLoader_dynamic.load( 'assets/sounds/'.concat(sound_file), function( buffer ) {
+        sound_dynamic.setBuffer( buffer );
+        sound_dynamic.setLoop( true );
+        sound_dynamic.setVolume( volume );
+        sound_dynamic.play();
+
+        setTimeout(() => {
+            sound_dynamic.stop()
+            // console.log("stop")
+        }, timeout)
+    });
+}
+
+
+function getSoundByName(name) {
+    const sounds = [];
+
+    scene.traverse((object) => {
+        if (object.type === "Audio" && object.name === name) {
+            sounds.push(object);
+            // console.log(object)
+        }
+    });
+
+    return sounds;
+}
+
+
+var soundNames = ['zombie', 'scary-laugh', 'monster-growls'];
+let moved = 0
+
+function addTorch(){
+    const spotLight = new THREE.SpotLight(0xffffff, 0.8);
+
+    spotLight.castShadow = true;
+    spotLight.shadow.mapSize.width = 100;
+    spotLight.shadow.mapSize.height = 100;
+
+    spotLight.shadow.camera.near = 0.5;
+    spotLight.shadow.camera.far = 20
+    spotLight.penumbra = 1
+    spotLight.distance = 500;
+
+    const spotLightTarget = new THREE.Object3D();
+    scene.add(spotLightTarget);
+    spotLight.target = spotLightTarget;
+
+    scene.add(spotLight);
+    spotLight.position.copy(cameraPosition);
+
+    spotLight.target.position.copy(targetPosition);
+    return spotLight
+}
+
+let spotLight = addTorch()
+let torch_on = 1
+
+
+let audio_object
+var audioLoader_zombie = new THREE.AudioLoader();
+var listener_zombie = new THREE.AudioListener();
+var audio_zombie = new THREE.Audio(listener_zombie)
+function audio_zombie_function(volume){
+    audioLoader_zombie.load('assets/sounds/scary-audio.mp3', function(buffer) {
+        audio_zombie.setBuffer(buffer);
+        audio_zombie.setLoop(true);
+        audio_zombie.setVolume(volume)
+        audio_zombie.play();
+    });
+    // audio_object = audio
+}
+
+// audio_zombie_function(5)
+
+// audio_function("zombie",10)
+// console.log(audio)
+// if (audio !== null) {
+//     // Stop the audio
+//     audio.volume = 10
+// }
+
+// audio_function("zombie",10)
+// audio.setVolume(0)
+// console.log(audio)
+// audio_function("scary-laugh",10)
+// console.log(audio)
+// console.log(getSoundByName("zombie"))
+
+
+function onObjectClick(imageUrl, width, height) {
+    const imageElement = document.createElement('img');
+    imageElement.src = imageUrl;
+    imageElement.style.width = width; // '80%'(chess)
+    imageElement.style.height = height; // 'auto'(chess)
+    imageElement.style.position = 'fixed';
+    imageElement.style.top = '50%';
+    imageElement.style.left = '50%';
+    imageElement.style.transform = 'translate(-50%, -50%)';
+    imageElement.style.zIndex = '9999';
+
+    // Append the image element to the document body
+    document.body.appendChild(imageElement);
+
+    // Close the image after 5 seconds
+    const timeoutId = setTimeout(() => {
+        document.body.removeChild(imageElement);
+        document.removeEventListener('click', closeImageOnClick);
+    }, 5000);
+
+    // Close the image when clicked
+    const closeImageOnClick = () => {
+        clearTimeout(timeoutId);
+        document.body.removeChild(imageElement);
+        imageElement.addEventListener('click', () => {
+            document.body.removeChild(imageElement);
+        });
+    };
+
+    // Add the event listener to the document body
+    document.addEventListener('click', closeImageOnClick);
+
+    
+}
+
+const fullscreenOverlay = document.getElementById('fullscreenOverlay');
+const fullscreenImage = document.getElementById('fullscreenImage');
+
+function lightMovement(){
+    var len = lights.length
+    var i = 0
+    var theta = 0.05
+    var x = 0, y = 0, z = 0
+    while (i < len) {
+        var x_rotation = lights[i].rotation.x
+        var y_rotation = lights[i].rotation.y
+        var z_rotation = lights[i].rotation.z
+    
+        lights[i].rotation.x += theta
+        lights[i].rotation.y += theta
+        lights[i].rotation.z += theta
+    
+    
+        x = 2*Math.sin( x_rotation ) 
+        y = 2*Math.cos( y_rotation ) 
+        z = 2*Math.cos( z_rotation )
+        
+        lights[i].position.x += x
+        lights[i].position.y += y
+        lights[i].position.z += z    
+        i += 1
+        // console.log(i%len, len)
+
+
+    }
+}
+
+
+
+// scene.add(new THREE.AxesHelper(2000))
+
+
+// const clock = new THREE.Clock()
+var keyboard = {};
+function keyDown(e) {
+    keyboard[e.keyCode] = true;
+}
+
+function keyUp(e) {
+    keyboard[e.keyCode] = false;
+}
+var lightTurn = 75
+
+// [[start,end,steps,axis="x"/"z",next]]
+let model1 = [[-800,300,5,"z",550],[-800,300,5,"z",260],[-800,300,5,"z",-1050],[-800,300,5,"z",-550]]
+let model1_index = 0
+let start = model1[model1_index][0]
+let end = model1[model1_index][1]
+let model1_count = start
+let next_model1 = model1[model1_index][4]
+
+let zombie_move = 0
+let current_paper = 0
+let elapsedTime
+let zombie_run = 0, hugger_run = 0, zombie_stop = 1, hugger_stop = 1
+let hit_clock, hit_elapsedTime_zombie, hit_elapsedTime_hugger, elapsedTime_hugger, hit_clock_hugger
+let hugger_path = [], hugger_move = 0, zombie_hit=0,hugger_hit=0
+function animate() {
+    requestAnimationFrame( animate );
+    
+    zombie_run = 0
+    hugger_run = 0
+    
+    if(clock_hugger  && hugger_follow){
+        elapsedTime_hugger = clock_hugger.getElapsedTime();
+        if(parseInt(elapsedTime_hugger) < 7 && parseInt(elapsedTime_hugger) > 2){
+            display_alert(7-parseInt(elapsedTime_hugger),0)    
+        }
+        else if(parseInt(elapsedTime_hugger) === 7){
+            // animation_hugger(1,1)
+            hugger_idle.visible = false
+            hugger.visible = true
+            scene.remove(hugger_idle)
+            dynamic_audio("monster-growls.mp3",60000,5)
+            display_alert(7-parseInt(elapsedTime_hugger),1000)    
+        }
+    }
+    if(clock && zombie_follow){
+        elapsedTime = clock.getElapsedTime();
+        
+        if(parseInt(elapsedTime) < 7 && parseInt(elapsedTime) > 2){
+            display_alert(7-parseInt(elapsedTime),0)    
+        }
+        else if(parseInt(elapsedTime) === 7){
+            zombie_idle.visible = false
+            scene.remove(zombie_idle)
+            zombie.visible = true
+            dynamic_audio("zombie.mp3",60000,5)
+
+            // animation_zombie(9,1)
+            display_alert(7-parseInt(elapsedTime),1000)    
+        }
+    } 
+    if(huggy){
+        if(model1_count === end){
+            model1_index++
+            if( model1_index === model1.length)
+                model1_index = 0
+            next_model1 = model1[model1_index][4]
+
+            start = model1[model1_index][0]
+            end = model1[model1_index][1]
+            model1_count = start        
+            if(model1[model1_index][3] === "x"){
+                huggy.position.x = start
+                huggy.position.z = next_model1
+            }
+            else{
+                huggy.position.z = start
+                huggy.position.x = next_model1
+            }
+        }
+        if(model1[model1_index][3] === "x"){
+            huggy.position.x += model1[model1_index][2] + 1
+        }
+        else{
+            huggy.position.z += model1[model1_index][2] + 1
+        }
+        model1_count += model1[model1_index][2]
+    }
+
+    TWEEN.update() 
+    const moveDirection = new THREE.Vector3();
+    
+    if(!torch_on){
+        
+        setTimeout(() => {
+            spotLight.intensity = 0.8
+            torch_on = 1
+        }, 5000);
+
+    }
+
+    if(paper_visible && paper_semi_visible){
+        if(current_paper===0){
+            setTimeout(function() {
+                paper_visible.visible = true
+                paper_semi_visible.visible = false
+                current_paper = 1
+            },2000);
+            
+            if(candle_flame.intensity <= 1 && candle_flame.intensity > 0.01){
+                candle_flame.intensity -= 0.01
+                
+            }
+        }
+        
+        else if(current_paper===1){
+            setTimeout(function() {
+                paper_visible.visible = false
+                paper_semi_visible.visible = true
+                
+                current_paper = 0
+            },2000);
+                if(candle_flame.intensity > 0 && candle_flame.intensity < 0.8){
+                    candle_flame.intensity += 0.01
+                    
+                }
+        }
+    }
+
+    if(movement){
+        if (keyboard[87]) { // W key (forward)
+            if (temp_sound_var === 0){
+                listener.context.resume().then(() => {
+                    sound.play();
+                });
+                temp_sound_var = 1
+            }
+            moveDirection.set(
+                -Math.sin(camera.rotation.y),
+                0,
+                -Math.cos(camera.rotation.y)
+            );
+        }
+
+        if (keyboard[83]) { // S key (backward)
+            moveDirection.set(
+                Math.sin(camera.rotation.y),
+                0,
+                Math.cos(camera.rotation.y)
+            );
+        }
+
+        if (keyboard[87] || keyboard[83]) {
+            moved = 1
+            // directionalLight.distance = 30
+
+            cameraPosition = new THREE.Vector3(camera.position.x, camera.position.y, camera.position.z); 
+            spotLight.position.copy(cameraPosition);
+            targetPosition = new THREE.Vector3(cameraPosition.x, 0, cameraPosition.z); 
+            spotLight.target.position.copy(targetPosition);
+            
+            moveDirection.normalize(); // Ensure the movement direction is normalized
+            const isColliding = intersection(moveDirection, 50);
+            const cameraDirection = new THREE.Vector3();
+            camera.getWorldDirection(cameraDirection);
+            
+            spotLight.target.position.x = spotLight.position.x + cameraDirection.x * lightTurn;
+            spotLight.target.position.z = spotLight.position.z + cameraDirection.z * lightTurn;
+
+            if (!isColliding) {
+                camera.position.x += moveDirection.x * player.speed;
+                camera.position.z += moveDirection.z * player.speed;  
+                if(zombie_follow)
+                    zombie_path.push(cameraPosition)
+                if(hugger_follow)
+                    hugger_path.push(cameraPosition)
+            }
+
+            if(zombie_follow){
+                // console.log("zombie")
+               
+                if(elapsedTime > 7 && elapsedTime < 60 && zombie_stop){
+                    if(!zombie_run && zombie_follow){
+                        zombie_run = 1
+                        // console.log("move")
+                        let path = zombie_path.shift()
+                        // path = zombie_path.shift()
+                        // console.log(zombie_path.length)
+                        zombie.rotation.y = zombie_angle
+                        if(zombie_path.length > 0){
+                                zombie.position.set(path.x,-20,path.z)
+                                spotLight.intensity = 0.8                    
+                        }
+                        else{
+                            zombie_stop = 0
+                            spotLight.intensity = 0
+                            hit_clock = new THREE.Clock()
+                            movement = 0
+                            zombie_follow = 0
+                            zombie_hit = 1
+                            while(zombie){
+                                scene.remove(zombie)
+                                zombie = getObjectByName("zombie")    
+                            }
+                            // scene.remove(zombie)
+                        }
+                    }
+                }
+            }
+
+            // if(hugger_follow){
+            //     hugger_path.push(cameraPosition)
+            //     console.log(hugger_path.length)
+            // }
+
+            
+            if(hugger_follow){
+                // console.log("hugger")
+               
+                if(elapsedTime_hugger > 7 && elapsedTime_hugger < 60 && hugger_stop){
+                    if(!hugger_run && hugger_follow){
+                        hugger_run = 1
+                        // console.log("move")
+                        let path = hugger_path.shift()
+                        // path = hugger_path.shift()
+                        // console.log(hugger_path.length)
+                        hugger.rotation.y = hugger_angle
+                        if(hugger_path.length > 0){
+                                hugger.position.set(path.x,-20,path.z)
+                                spotLight.intensity = 0.8                    
+                        }
+                        else{
+                            hugger_stop = 0
+                            spotLight.intensity = 0
+                            hit_clock_hugger = new THREE.Clock()
+                            movement = 0
+                            hugger_follow = 0
+                            hugger_hit = 1
+                            hugger.visible = false
+                            while(hugger){
+                                scene.remove(hugger)
+                                hugger = getObjectByName("hugger")    
+                            }
+                        }
+                    }
+                }
+            }
+            // if(elapsedTime_hugger > 5){
+            //     if(!hugger_run && hugger_follow){
+            //         hugger_run = 1
+            //         console.log("move")
+            //         let path = hugger_path.shift()
+            //         // path = hugger_path.shift()
+            //         console.log(hugger_path.length)
+            //         hugger.rotation.y = hugger_angle
+            //         if(hugger_path.length > 0){
+            //             setTimeout(function() {
+            //                 hugger.position.set(path.x,-20,path.z)
+            //                 spotLight.intensity = 0.8                    
+            //             },0)
+            //         }
+            //         else{
+            //             spotLight.intensity = 0
+            //             hit_clock_hugger = new THREE.Clock()
+            //             movement = 0
+            //             hugger_follow = 0
+            //             scene.remove(hugger)
+            //             hugger_hit = 1
+            //         }
+            //         hugger.rotation.y = hugger_angle
+            //     }
+            // }
+                
+        }
+
+        else{
+            if(elapsedTime > 7 && elapsedTime < 60 && zombie_stop){
+                if(!zombie_run && zombie_follow){
+                    // console.log("run")
+                    let path = zombie_path.shift()
+                    // path = zombie_path.shift()
+                    // console.log(zombie_path.length)
+                    zombie.rotation.y = zombie_angle
+                    if(zombie_path.length > 0){
+                        // setTimeout(function() {
+                            zombie.position.set(path.x,-20,path.z)
+                            spotLight.intensity = 0.8                    
+                        // },1000)
+                    }
+                    else{
+                        zombie_stop = 0
+                        spotLight.intensity = 0
+                        hit_clock = new THREE.Clock()
+                        movement = 0
+                        zombie_follow = 0
+                        // scene.remove(zombie)
+                        while(zombie){
+                            scene.remove(zombie)
+                            zombie = getObjectByName("zombie")    
+                        }
+                        zombie_hit = 1
+                    }
+                }
+            }
+
+            else if(elapsedTime > 60 && zombie_stop){
+                // scene.remove(zombie)
+                while(zombie){
+                    scene.remove(zombie)
+                    zombie = getObjectByName("zombie")    
+                }
+                zombie_stop = 0
+                zombie_follow = 0
+            }
+
+
+            if(elapsedTime_hugger > 7 && elapsedTime_hugger < 60 && hugger_stop){
+                if(!hugger_run && hugger_follow){
+                    // console.log("run")
+                    let path = hugger_path.shift()
+                    // path = hugger_path.shift()
+                    // console.log(hugger_path.length)
+                    hugger.rotation.y = hugger_angle
+                    if(hugger_path.length > 0){
+                        // setTimeout(function() {
+                            hugger.position.set(path.x,-20,path.z)
+                            spotLight.intensity = 0.8                    
+                        // },1000)
+                    }
+                    else{
+                        display_alert("YOU GOT CAUGHT...<br>WAIT for 30 Seconds TILL THE DEVIL'S DISCIPLES RELEASES YOU",20000)
+                        hugger_stop = 0
+                        spotLight.intensity = 0
+                        hit_clock_hugger = new THREE.Clock()
+                        movement = 0
+                        hugger_follow = 0
+                        while(hugger){
+                            scene.remove(hugger)
+                            hugger = getObjectByName("hugger")    
+                        }
+                        // scene.remove(hugger)
+                        // hugger = getObjectByName("hugger")
+                        // if(hugger)
+                        //     scene.remove(hugger)
+                        // // console.log(scene.children)
+                        hugger_hit = 1
+                    }
+                }
+            }
+
+            else if(elapsedTime_hugger > 60 && hugger_stop){
+                while(hugger){
+                    scene.remove(hugger)
+                    hugger = getObjectByName("hugger")    
+                }
+                // scene.remove(hugger)
+                // hugger = getObjectByName("hugger")
+                // if(hugger)
+                //     scene.remove(hugger)
+                hugger_stop = 0
+                hugger_follow = 0
+            }
+            // if(elapsedTime_hugger > 5 && elapsedTime_hugger < 20){
+            //     if(!hugger_run && hugger_follow){
+            //         hugger_run = 1
+            //         console.log("move")
+            //         let path = hugger_path.shift()
+            //         // path = hugger_path.shift()
+            //         console.log(hugger_path.length)
+            //         hugger.rotation.y = hugger_angle
+            //         if(hugger_path.length > 0){
+            //             setTimeout(function() {
+            //                 hugger.position.set(path.x,-20,path.z)
+            //                 spotLight.intensity = 0.8                    
+            //             },0)
+            //         }
+            //         else{
+            //             spotLight.intensity = 0
+            //             hit_clock_hugger = new THREE.Clock()
+            //             movement = 0
+            //             hugger_follow = 0
+            //             scene.remove(hugger)
+            //             hugger_hit = 1
+            //         }
+            //         hugger.rotation.y = hugger_angle
+            //     }
+            // }
+
+            // else if(elapsedTime_hugger > 5 && elapsedTime_hugger < 20){
+            //     scene.remove(hugger)
+            // }
+        }
+
+        if (keyboard[68]) { // A key (turn right)
+            camera.rotation.y -= player.turnSpeed;
+            zombie_angle -= player.turnSpeed
+            hugger_angle -= player.turnSpeed
+            const cameraDirection = new THREE.Vector3();
+            camera.getWorldDirection(cameraDirection);
+            // console.log("Camera Direction:", cameraDirection);
+            // console.log("Spotlight Direction:", spotLight.target.position);
+            // console.log("Camera:", cameraDirection);
+            spotLight.target.position.x = spotLight.position.x + cameraDirection.x * lightTurn;
+            spotLight.target.position.z = spotLight.position.z + cameraDirection.z * lightTurn;
+        }
+
+        if (keyboard[65]) { // D key (turn left)
+            camera.rotation.y += player.turnSpeed;
+            zombie_angle += player.turnSpeed
+            hugger_angle += player.turnSpeed
+            const cameraDirection = new THREE.Vector3();
+            camera.getWorldDirection(cameraDirection)
+            spotLight.target.position.x = spotLight.position.x + cameraDirection.x * lightTurn;
+            spotLight.target.position.z = spotLight.position.z + cameraDirection.z * lightTurn;
+        }
+    }
+
+    else{
+        if(hit_clock && !zombie_stop)
+            hit_elapsedTime_zombie = hit_clock.getElapsedTime();
+        
+        if(hit_clock_hugger && !hugger_stop)
+            hit_elapsedTime_hugger = hit_clock_hugger.getElapsedTime();
+        
+        // if(zombie_hit===1 || hugger_hit===1 ){
+        if(parseInt(hit_elapsedTime_zombie) >= 20){
+            display_alert(20-parseInt(hit_elapsedTime_zombie),1000)    
+            // console.log(hit_elapsedTime_zombie)
+            movement = 1
+            spotLight.intensity = 0.8  
+            // if(hugger_hit===1)
+            //     hugger_hit=-1
+            // else
+            //     zombie_hit=-1      
+        }
+            
+        else if(parseInt(hit_elapsedTime_zombie) < 20){
+            setTimeout(() => {
+                // console.log(hit_elapsedTime_zombie)
+                display_alert(20-parseInt(hit_elapsedTime_zombie),-1)
+            }, 1000);    
+        }
+
+
+        if(parseInt(hit_elapsedTime_hugger) >= 20){
+            // display_alert(0,1000)    
+            // console.log(hit_elapsedTime_hugger)
+            movement = 1
+            spotLight.intensity = 0.8  
+            // if(hugger_hit===1)
+            //     hugger_hit=-1
+            // else
+            //     zombie_hit=-1      
+        }
+            
+        // if(parseInt(hit_elapsedTime_hugger) < 20){
+            // if(parseInt(hit_elapsedTime_hugger) != 19){
+            //     setTimeout(() => {
+            //         console.log(hit_elapsedTime_hugger)
+            //         display_alert(20-parseInt(hit_elapsedTime_hugger),-1)
+            //     }, 1000);    
+            // }
+            // else{
+            //     display_alert(20-parseInt(hit_elapsedTime_hugger),0)
+            // }
+        // }
+    }
+
+    if (start_bunny2){
+        // let bunny = getObjectByName("bunny2")
+        // if(bunny)
+        // scene.remove(bunny)
+        // bunny2.visible = true;
+
+        bunny2.position.x += 20
+        let bunny_spotlight = getObjectByName("bunny2_light");
+        // console.log(bunny_spotlight)
+        if (bunny2 && bunny_spotlight){
+            bunny_spotlight.target = bunny
+            let model_position = new THREE.Vector3(bunny2.position.x+60, bunny2.position.y+50, bunny2.position.z);
+            bunny_spotlight.position.copy(model_position);
+            bunny_spotlight.target = bunny2
+            if (bunny2.position.x >= 100){
+                start_bunny2 = false
+                scene.remove(bunny2)
+                scene.remove(bunny_spotlight)
+                let sound = sounds["bunny2"]
+                sound.stop()
+            }
+        }
+    }
+
+    if (start_bunny){
+        // scene.remove(bunny2)
+        // // let bunny = getObjectByName("bunny")
+        // bunny.visible = true;
+
+        bunny.position.x -= 20
+        let bunny_spotlight = getObjectByName("bunny_light");
+        // console.log(bunny_spotlight)
+        if (bunny && bunny_spotlight){
+            bunny_spotlight.target = bunny
+            let model_position = new THREE.Vector3(bunny.position.x-60, bunny.position.y+50, bunny.position.z);
+            bunny_spotlight.position.copy(model_position);
+            bunny_spotlight.target = bunny
+            if (bunny.position.x <= -9000){
+                start_bunny = false
+                scene.remove(bunny)
+                scene.remove(bunny_spotlight)
+                let sound = sounds["bunny"]
+                sound.stop()
+            }
+        }
+    }
+
+    if (dark_man){
+        let dark_man = getObjectByName("dark_man")
+        let dark_man2 = getObjectByName("dark_man2")
+        scene.remove(dark_man2)
+        dark_man.visible = true;
+
+        dark_man.position.x -= 40
+        let dark_man_spotlight = getObjectByName("dark_man_light");
+        // console.log(bunny_spotlight)
+        if (dark_man && dark_man_spotlight){
+            dark_man_spotlight.target = dark_man
+            let model_position = new THREE.Vector3(dark_man.position.x-50, dark_man.position.y+100, dark_man.position.z);
+            dark_man_spotlight.position.copy(model_position);
+            dark_man_spotlight.target = dark_man
+            if (dark_man.position.z >= 3000){
+                dark_man = false
+                scene.remove(dark_man)
+                scene.remove(dark_man_spotlight)
+                let sound = sounds["dark_man"]
+                sound.stop()
+            }
+        }
+    }
+
+    if (dark_man2){
+        let dark_man = getObjectByName("dark_man2")
+        let dark_man2_model = getObjectByName("dark_man")
+        scene.remove(dark_man2_model)
+        dark_man.visible = true;
+
+        dark_man.position.x += 40
+        let dark_man_spotlight = getObjectByName("dark_man2_light");
+        // console.log(bunny_spotlight)
+        
+        if (dark_man && dark_man_spotlight){
+            dark_man_spotlight.target = dark_man
+            let model_position = new THREE.Vector3(dark_man.position.x, dark_man.position.y+100, dark_man.position.z+100);
+            dark_man_spotlight.position.copy(model_position);
+            if (dark_man.position.z < -3000){
+                dark_man2 = false
+                scene.remove(dark_man)
+                scene.remove(dark_man_spotlight)
+                let sound = sounds["dark_man"]
+                sound.stop()
+            }
+        }
+    }
+    
+    // if(candle)
+    //     candle.rotation.y += THREE.Math.degToRad(90) 
+    // if(moved){
+    //     for(let i = 0; i < soundNames.length; i++){
+            // playNextSound(0);
+            // soundNames[i]
+        // }
+    // }
+    // if(audio_zombie){
+    //     setTimeout(function () {
+    //         if (audio_zombie.parent) {
+    //             audio_zombie.parent.remove(audio_zombie);
+    //         } else {
+    //             console.warn("The audio object has no parent to remove from the scene.");
+    //         }
+    //         // console.log(audio_zombie)
+    //         // audio_zombie.stop()
+    //         // console.log("pause")
+    //     }, 5000);
+    // }
+    window.addEventListener('keydown', keyDown);
+    window.addEventListener('keyup', keyUp);
+    renderer.render( scene, camera );
+};  
+// addSounds()
+document.addEventListener('click', onMouseClick);
+animate();
+
+
